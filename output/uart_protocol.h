@@ -34,18 +34,20 @@
 namespace output {
 
 // ===== CH9350L 风格帧常量 =====
-constexpr uint8_t kFrameHdr1 = 0x57;
-constexpr uint8_t kFrameHdr2 = 0xAB;
+// 注: 使用 std::uint8_t / std::size_t 以严格符合 C++ <cstdint> 规范
+//     （消除 IDE "未定义标识符 uint8_t" 的静态分析告警）
+constexpr std::uint8_t kFrameHdr1 = 0x57;
+constexpr std::uint8_t kFrameHdr2 = 0xAB;
 
 // TYPE 定义
-constexpr uint8_t kTypeKeyboardEvent = 0x01;
+constexpr std::uint8_t kTypeKeyboardEvent = 0x01;
 
 // keyboard event DATA 长度（固定 3 字节）
-constexpr size_t kKeyboardDataLen = 3;
+constexpr std::size_t kKeyboardDataLen = 3;
 
 // 一个 keyboard event frame 的总长度
 // 2(header) + 1(len) + 1(type) + 3(data) + 1(checksum) = 8
-constexpr size_t kKeyboardFrameLen =
+constexpr std::size_t kKeyboardFrameLen =
     2 + 1 + 1 + kKeyboardDataLen + 1;  // 8
 
 // —— UART0 引脚和波特率定义为实现细节，保存在 uart_protocol.cpp ——
