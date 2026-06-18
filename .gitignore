@@ -1,2 +1,25 @@
-build
-!.vscode/*
+# Build directories
+build/
+cmake-build-*/
+
+# IDE configuration
+.idea/
+.vscode/
+.cache/
+
+# Compiled database - auto-generated
+compile_commands.json
+
+# Binary output files
+*.uf2
+*.elf
+*.hex
+*.bin
+*.dis
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log

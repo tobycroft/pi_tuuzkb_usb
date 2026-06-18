@@ -1,3 +1,17 @@
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.2.0)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.2.0-a4)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
@@ -41,8 +55,6 @@ pico_enable_stdio_usb(pi_tuuzkb_usb 1)
 
 target_link_libraries(pi_tuuzkb_usb
         pico_stdlib
-        tinyusb_device
-        tinyusb_board
 )
 
 target_include_directories(pi_tuuzkb_usb PRIVATE
@@ -60,4 +72,3 @@ target_link_libraries(pi_tuuzkb_usb
 )
 
 pico_add_extra_outputs(pi_tuuzkb_usb)
-
