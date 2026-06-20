@@ -123,6 +123,15 @@ void uart_send_pong(uint8_t payload) {
     uart_write_blocking(uart0, g_pong_buf, kPingPongFrameLen);
 }
 
+void uart_send_ping() {
+    if (!g_initialized) return;
+
+    // 4 字节原始帧：57 AB 10 03
+    // 无 LEN / TYPE / DATA / CHECKSUM，直接发送
+    const uint8_t raw_ping[] = {0x57, 0xAB, 0x10, 0x03};
+    uart_write_blocking(uart0, raw_ping, sizeof(raw_ping));
+}
+
 void uart_poll_rx() {
     if (!g_initialized) return;
 

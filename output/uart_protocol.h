@@ -82,6 +82,10 @@ void uart_send_key_event(const usb_host::key_event& e);
 // payload: 收到的 PING payload，原样回显
 void uart_send_pong(std::uint8_t payload);
 
+// 发送 PING 帧（RP2040 主动发向主机，心跳/存活检测）
+// 帧内容：57 AB 10 03（4 字节原始帧，无 LEN/TYPE/CHECKSUM）
+void uart_send_ping();
+
 // UART RX 轮询（在主循环中调用）
 // 状态机解析接收帧，自动处理 PING → PONG
 // 非阻塞：每次调用最多读取 1 字节，逐步推进状态

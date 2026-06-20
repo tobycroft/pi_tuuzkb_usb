@@ -119,6 +119,7 @@ int main() {
 
     // ===== 4) 主循环 =====
     uint32_t last_tick_ms = to_ms_since_boot(get_absolute_time());
+    uint32_t last_ping_ms = to_ms_since_boot(get_absolute_time());
 
     while (true) {
 #if ENABLE_USB
@@ -131,9 +132,16 @@ int main() {
         // 非阻塞：每次调用最多读取 1 字节，逐步推进状态机
         output::uart_poll_rx();
 
+        uint32_t now = to_ms_since_boot(get_absolute_time());
+
+        // ===== 5 秒心跳 PING =====
+        if (now - last_ping_ms >= 5000) {
+            last_ping_ms = now;
+            output::uart_send_ping();
+        }
+
         // —— 心跳：每秒一次，仅调试模式输出文本（确认主循环未卡死）——
 #if ENABLE_DEBUG_TEXT
-        uint32_t now = to_ms_since_boot(get_absolute_time());
         if (now - last_tick_ms >= 1000) {
             last_tick_ms = now;
             std::printf("LOOP TICK\n");
