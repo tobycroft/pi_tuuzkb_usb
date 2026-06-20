@@ -21,7 +21,7 @@ namespace output {
 //   RX = GPIO1 (Pin 2)
 constexpr uint8_t kUartTXPin = 0;
 constexpr uint8_t kUartRXPin = 1;
-constexpr uint32_t kBaudRate = 115200;
+constexpr uint32_t kBaudRate = 9600;
 
 class UartLogger {
 public:

@@ -21,13 +21,33 @@ namespace {
 // 与 output/uart_logger.h 中定义的常量一致，二者共享同一硬件 UART0
 constexpr uint8_t  kUartTXPin   = 0;
 constexpr uint8_t  kUartRXPin   = 1;
-constexpr uint32_t kUartBaudRate = 115200;
+constexpr uint32_t kUartBaudRate = 9600;
 
 bool g_initialized = false;
 
 // 静态帧缓冲区（8 字节），避免堆分配
 // 帧: 0x57 0xAB LEN TYPE DATA0 DATA1 DATA2 CHECKSUM
 uint8_t g_frame_buf[kKeyboardFrameLen];
+
+// PONG 帧缓冲区（6 字节）
+uint8_t g_pong_buf[kPingPongFrameLen];
+
+// ===== RX 状态机 =====
+enum RxState {
+    RX_WAIT_HDR1,    // 等待 0x57
+    RX_WAIT_HDR2,    // 等待 0xAB
+    RX_WAIT_LEN,     // 等待 LEN
+    RX_WAIT_TYPE,    // 等待 TYPE
+    RX_WAIT_DATA,    // 等待 DATA 字节
+    RX_WAIT_CHECKSUM // 等待 CHECKSUM
+};
+
+RxState g_rx_state = RX_WAIT_HDR1;
+uint8_t g_rx_len = 0;        // 收到的 LEN 字节
+uint8_t g_rx_type = 0;       // 收到的 TYPE 字节
+uint8_t g_rx_data[16];       // DATA 缓冲区（最大支持 16 字节）
+uint8_t g_rx_data_idx = 0;   // 当前已收到的 DATA 字节数
+uint8_t g_rx_checksum = 0;   // 收到的 CHECKSUM
 
 } // namespace
 
@@ -80,6 +100,113 @@ void uart_send_key_event(const usb_host::key_event& e) {
     // 注：uart_write_blocking 内部会等待 FIFO 空间；
     //     115200 baud 下 8 字节 ≈ 694 µs，可忽略阻塞时间
     uart_write_blocking(uart0, g_frame_buf, kKeyboardFrameLen);
+}
+
+void uart_send_pong(uint8_t payload) {
+    if (!g_initialized) return;
+
+    // 预填充帧头
+    g_pong_buf[0] = kFrameHdr1;                      // 0x57
+    g_pong_buf[1] = kFrameHdr2;                      // 0xAB
+    g_pong_buf[2] = static_cast<uint8_t>(kPingPongFrameLen); // LEN = 6
+    g_pong_buf[3] = kTypePong;                       // TYPE = 0x03
+    g_pong_buf[4] = payload;                         // DATA = payload
+
+    // CHECKSUM: XOR 所有前面字节
+    uint8_t xor_sum = 0;
+    for (size_t i = 0; i < kPingPongFrameLen - 1; i++) {
+        xor_sum ^= g_pong_buf[i];
+    }
+    g_pong_buf[5] = xor_sum;
+
+    // 原子输出
+    uart_write_blocking(uart0, g_pong_buf, kPingPongFrameLen);
+}
+
+void uart_poll_rx() {
+    if (!g_initialized) return;
+
+    // 检查 RX FIFO 是否有数据
+    if (!uart_is_readable(uart0)) return;
+
+    // 读取 1 字节
+    uint8_t byte = uart_getc(uart0);
+
+    switch (g_rx_state) {
+    case RX_WAIT_HDR1:
+        if (byte == kFrameHdr1) {
+            g_rx_state = RX_WAIT_HDR2;
+        }
+        break;
+
+    case RX_WAIT_HDR2:
+        if (byte == kFrameHdr2) {
+            g_rx_state = RX_WAIT_LEN;
+        } else {
+            // 不是 0xAB，重置
+            g_rx_state = RX_WAIT_HDR1;
+        }
+        break;
+
+    case RX_WAIT_LEN:
+        g_rx_len = byte;
+        // LEN 必须 >= 5 (header + len + type + checksum 最小 5 字节)
+        // 且 DATA 长度 = LEN - 5，不能超过缓冲区
+        if (g_rx_len < 5 || (g_rx_len - 5) > sizeof(g_rx_data)) {
+            g_rx_state = RX_WAIT_HDR1;
+        } else {
+            g_rx_state = RX_WAIT_TYPE;
+        }
+        break;
+
+    case RX_WAIT_TYPE: {
+        g_rx_type = byte;
+        g_rx_data_idx = 0;
+        // 计算 DATA 字节数 = LEN - 5
+        uint8_t data_len = g_rx_len - 5;
+        if (data_len == 0) {
+            // 无 DATA，直接等待 CHECKSUM
+            g_rx_state = RX_WAIT_CHECKSUM;
+        } else {
+            g_rx_state = RX_WAIT_DATA;
+        }
+        break;
+    }
+
+    case RX_WAIT_DATA: {
+        g_rx_data[g_rx_data_idx++] = byte;
+        // 判断是否收完所有 DATA
+        uint8_t expected_data_len = g_rx_len - 5;
+        if (g_rx_data_idx >= expected_data_len) {
+            g_rx_state = RX_WAIT_CHECKSUM;
+        }
+        break;
+    }
+
+    case RX_WAIT_CHECKSUM: {
+        g_rx_checksum = byte;
+        // 校验 XOR
+        uint8_t xor_sum = kFrameHdr1 ^ kFrameHdr2 ^ g_rx_len ^ g_rx_type;
+        for (uint8_t i = 0; i < g_rx_data_idx; i++) {
+            xor_sum ^= g_rx_data[i];
+        }
+
+        if (xor_sum == g_rx_checksum) {
+            // 校验通过，根据 TYPE 分派
+            if (g_rx_type == kTypePing && g_rx_data_idx == 1) {
+                // PING: 回传 PONG，payload = g_rx_data[0]
+                uart_send_pong(g_rx_data[0]);
+            }
+            // 其他 TYPE 暂不处理（TYPE=0x01 是 TX 方向，不应出现在 RX）
+        }
+        // 无论校验成功或失败，都重置状态机
+        g_rx_state = RX_WAIT_HDR1;
+        g_rx_len = 0;
+        g_rx_type = 0;
+        g_rx_data_idx = 0;
+        break;
+    }
+    }
 }
 
 bool uart_protocol_is_initialized() {

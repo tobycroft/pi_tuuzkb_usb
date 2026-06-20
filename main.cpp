@@ -127,6 +127,10 @@ int main() {
         tuh_task();
 #endif
 
+        // ===== UART RX 轮询（PING/PONG 处理）=====
+        // 非阻塞：每次调用最多读取 1 字节，逐步推进状态机
+        output::uart_poll_rx();
+
         // —— 心跳：每秒一次，仅调试模式输出文本（确认主循环未卡死）——
 #if ENABLE_DEBUG_TEXT
         uint32_t now = to_ms_since_boot(get_absolute_time());
