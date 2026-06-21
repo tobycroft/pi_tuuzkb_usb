@@ -47,7 +47,7 @@ pico_sdk_init()
 #   main.cpp   - 初始化 + onKeyEvent 路由到 uart_protocol + 主循环 + tuh_task()
 
 set(ENABLE_USB 1 CACHE STRING "Enable USB Host HID subsystem (0=disabled, 1=enabled)")
-set(ENABLE_DEBUG_TEXT 1 CACHE STRING "Enable debug text output on UART0 (0=binary-only, 1=with-text)")
+set(ENABLE_DEBUG_TEXT 0 CACHE STRING "Enable debug text output on UART0 (0=binary-only, 1=with-text)")
 
 add_executable(pi_tuuzkb_usb
     main.cpp

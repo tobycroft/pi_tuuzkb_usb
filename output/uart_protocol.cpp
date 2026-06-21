@@ -132,6 +132,44 @@ void uart_send_ping() {
     uart_write_blocking(uart0, raw_ping, sizeof(raw_ping));
 }
 
+void uart_send_device_mount(uint8_t dev_addr) {
+    if (!g_initialized) return;
+
+    uint8_t buf[kDeviceEventFrameLen];
+    buf[0] = kFrameHdr1;                                    // 0x57
+    buf[1] = kFrameHdr2;                                    // 0xAB
+    buf[2] = static_cast<uint8_t>(kDeviceEventFrameLen);    // LEN = 6
+    buf[3] = kTypeDeviceMount;                              // TYPE = 0x04
+    buf[4] = dev_addr;                                      // DATA = dev_addr
+
+    uint8_t xor_sum = 0;
+    for (size_t i = 0; i < kDeviceEventFrameLen - 1; i++) {
+        xor_sum ^= buf[i];
+    }
+    buf[5] = xor_sum;
+
+    uart_write_blocking(uart0, buf, kDeviceEventFrameLen);
+}
+
+void uart_send_device_umount(uint8_t dev_addr) {
+    if (!g_initialized) return;
+
+    uint8_t buf[kDeviceEventFrameLen];
+    buf[0] = kFrameHdr1;                                    // 0x57
+    buf[1] = kFrameHdr2;                                    // 0xAB
+    buf[2] = static_cast<uint8_t>(kDeviceEventFrameLen);    // LEN = 6
+    buf[3] = kTypeDeviceUmount;                             // TYPE = 0x05
+    buf[4] = dev_addr;                                      // DATA = dev_addr
+
+    uint8_t xor_sum = 0;
+    for (size_t i = 0; i < kDeviceEventFrameLen - 1; i++) {
+        xor_sum ^= buf[i];
+    }
+    buf[5] = xor_sum;
+
+    uart_write_blocking(uart0, buf, kDeviceEventFrameLen);
+}
+
 void uart_poll_rx() {
     if (!g_initialized) return;
 

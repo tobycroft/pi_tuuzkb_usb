@@ -12,7 +12,7 @@
             ],
             "defines": [],
             "compilerPath": "/Users/tobycroft/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-gcc",
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "compileCommands": "/Users/tobycroft/IdeaProjects/pi_tuuzkb_usb/build/compile_commands.json",
             "cStandard": "c17",
             "cppStandard": "c++14",
             "intelliSenseMode": "macos-gcc-x64"

@@ -50,27 +50,13 @@ static void onKeyEvent(const usb_host::key_event& e) {
 }
 
 #if ENABLE_USB
-// 设备插拔事件：输出设备地址、VID/PID，便于调试
+// 设备插拔事件：发送二进制帧通知（不依赖调试文本）
 static void onMount(uint8_t dev_addr, bool mounted) {
-#if ENABLE_DEBUG_TEXT
     if (mounted) {
-        // 读取 VID/PID（仅 mount 时查询一次）
-        uint16_t vid = 0, pid = 0;
-        if (tuh_vid_pid_get(dev_addr, &vid, &pid)) {
-            std::printf("[MAIN] Keyboard mounted: dev_addr=%u VID=0x%04X PID=0x%04X\n",
-                        static_cast<unsigned>(dev_addr), vid, pid);
-        } else {
-            std::printf("[MAIN] Keyboard mounted: dev_addr=%u (VID/PID unavailable)\n",
-                        static_cast<unsigned>(dev_addr));
-        }
+        output::uart_send_device_mount(dev_addr);
     } else {
-        std::printf("[MAIN] Keyboard unmounted: dev_addr=%u\n",
-                    static_cast<unsigned>(dev_addr));
+        output::uart_send_device_umount(dev_addr);
     }
-#else
-    (void)dev_addr;
-    (void)mounted;
-#endif
 }
 #endif  // ENABLE_USB
 
@@ -84,16 +70,22 @@ int main() {
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
+#if ENABLE_DEBUG_TEXT
+    // —— 调试模式：先初始化 stdio（默认 115200），再由 uart_protocol_init 覆盖为 9600 ——
+    // 注意：stdio_init_all() 会调用 uart_init(uart0, PICO_DEFAULT_UART_BAUD_RATE=115200)
+    //       必须在 uart_protocol_init() 之前调用，否则会被覆盖
+    stdio_init_all();
+    sleep_ms(300);
+#endif
+
     // ===== 1) 初始化 UART0 二进制协议层（必须先于任何输出）=====
     // - 9600 / 8N1
     // - TX = GPIO0, RX = GPIO1
     // - 这是本项目唯一的"关键数据通道"
+    // - 注意：此调用会 uart_init(uart0, 9600)，覆盖 stdio_init_all 的 115200
     output::uart_protocol_init();
 
 #if ENABLE_DEBUG_TEXT
-    // —— 调试模式：额外初始化 stdio & UartLogger（默认关闭）——
-    stdio_init_all();
-    sleep_ms(300);
     std::printf("\n========================================\n");
     std::printf("  Pi Tuuzkb USB - CH9350L Bridge\n");
     std::printf("  ENABLE_USB = %d, ENABLE_DEBUG_TEXT = %d\n",

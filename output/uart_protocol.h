@@ -43,12 +43,22 @@ constexpr std::uint8_t kFrameHdr2 = 0xAB;
 constexpr std::uint8_t kTypeKeyboardEvent = 0x01;  // RP2040 → Host: 按键事件
 constexpr std::uint8_t kTypePing          = 0x02;  // Host → RP2040: PING 请求
 constexpr std::uint8_t kTypePong          = 0x03;  // RP2040 → Host: PONG 回应
+constexpr std::uint8_t kTypeDeviceMount   = 0x04;  // RP2040 → Host: USB 设备挂载
+constexpr std::uint8_t kTypeDeviceUmount  = 0x05;  // RP2040 → Host: USB 设备卸载
 
 // keyboard event DATA 长度（固定 3 字节）
 constexpr std::size_t kKeyboardDataLen = 3;
 
 // PING/PONG DATA 长度（固定 1 字节 payload）
 constexpr std::size_t kPingPongDataLen = 1;
+
+// Device mount/umount DATA 长度（1 字节: dev_addr）
+constexpr std::size_t kDeviceEventDataLen = 1;
+
+// Device event frame 总长度
+// 2(header) + 1(len) + 1(type) + 1(data) + 1(checksum) = 6
+constexpr std::size_t kDeviceEventFrameLen =
+    2 + 1 + 1 + kDeviceEventDataLen + 1;  // 6
 
 // 一个 keyboard event frame 的总长度
 // 2(header) + 1(len) + 1(type) + 3(data) + 1(checksum) = 8
@@ -85,6 +95,14 @@ void uart_send_pong(std::uint8_t payload);
 // 发送 PING 帧（RP2040 主动发向主机，心跳/存活检测）
 // 帧内容：57 AB 10 03（4 字节原始帧，无 LEN/TYPE/CHECKSUM）
 void uart_send_ping();
+
+// 发送 USB 设备挂载通知帧
+// 帧内容：57 AB 06 04 <dev_addr> <XOR>
+void uart_send_device_mount(std::uint8_t dev_addr);
+
+// 发送 USB 设备卸载通知帧
+// 帧内容：57 AB 06 05 <dev_addr> <XOR>
+void uart_send_device_umount(std::uint8_t dev_addr);
 
 // UART RX 轮询（在主循环中调用）
 // 状态机解析接收帧，自动处理 PING → PONG
