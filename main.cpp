@@ -26,7 +26,6 @@
 
 #include "usb_host/usb_callbacks.h"
 #include "output/uart_protocol.h"
-
 #if ENABLE_USB
 #include "tusb.h"
 #include "hid/hid_parser.h"
@@ -51,12 +50,23 @@ static void onKeyEvent(const usb_host::key_event& e) {
 }
 
 #if ENABLE_USB
-// 设备插拔事件（不输出二进制帧，可选通过文本日志通知）
+// 设备插拔事件：输出设备地址、VID/PID，便于调试
 static void onMount(uint8_t dev_addr, bool mounted) {
 #if ENABLE_DEBUG_TEXT
-    std::printf("[MAIN] Keyboard device %u: %s\n",
-                static_cast<unsigned>(dev_addr),
-                mounted ? "mounted" : "unmounted");
+    if (mounted) {
+        // 读取 VID/PID（仅 mount 时查询一次）
+        uint16_t vid = 0, pid = 0;
+        if (tuh_vid_pid_get(dev_addr, &vid, &pid)) {
+            std::printf("[MAIN] Keyboard mounted: dev_addr=%u VID=0x%04X PID=0x%04X\n",
+                        static_cast<unsigned>(dev_addr), vid, pid);
+        } else {
+            std::printf("[MAIN] Keyboard mounted: dev_addr=%u (VID/PID unavailable)\n",
+                        static_cast<unsigned>(dev_addr));
+        }
+    } else {
+        std::printf("[MAIN] Keyboard unmounted: dev_addr=%u\n",
+                    static_cast<unsigned>(dev_addr));
+    }
 #else
     (void)dev_addr;
     (void)mounted;
@@ -68,8 +78,14 @@ static void onMount(uint8_t dev_addr, bool mounted) {
 // main()
 // ============================================================================
 int main() {
+    // ===== 0) 板载 LED 初始化（Pico 默认 LED = GPIO25）=====
+    // 启动后立即点亮，提示固件已运行
+    gpio_init(PICO_DEFAULT_LED_PIN);
+    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    gpio_put(PICO_DEFAULT_LED_PIN, 1);
+
     // ===== 1) 初始化 UART0 二进制协议层（必须先于任何输出）=====
-    // - 115200 / 8N1
+    // - 9600 / 8N1
     // - TX = GPIO0, RX = GPIO1
     // - 这是本项目唯一的"关键数据通道"
     output::uart_protocol_init();

@@ -100,6 +100,9 @@ size_t getMountedKeyboardCount() {
 // ===========================
 extern "C" {
 
+// 设备挂载回调：只处理 HID keyboard 接口。
+// 非 keyboard 接口也通过 receive_report 启动轮询以保持枚举健康，
+// 但不分配 parser slot、不计数 g_mounted。
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                       uint8_t const* desc_report, uint16_t desc_len) {
     (void)desc_report;
@@ -107,13 +110,18 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 
     const uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-    if (itf_protocol != HID_ITF_PROTOCOL_KEYBOARD) {
-        usb_host::findOrAllocSlot(dev_addr, instance, true);
-        usb_host::g_mounted++;
-        if (usb_host::g_mount_cb != nullptr) {
-            usb_host::g_mount_cb(dev_addr, true);
+    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
+        // 分配 parser slot
+        auto* slot = usb_host::findOrAllocSlot(dev_addr, instance, true);
+        if (slot != nullptr) {
+            usb_host::g_mounted++;
+            if (usb_host::g_mount_cb != nullptr) {
+                usb_host::g_mount_cb(dev_addr, true);
+            }
         }
     }
+
+    // 启动 report 接收（HID class 必须调用，否则不会收到数据）
     tuh_hid_receive_report(dev_addr, instance);
 }
 
