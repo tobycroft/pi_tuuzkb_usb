@@ -67,11 +67,10 @@ void uart_protocol_init() {
     // 开启 TX FIFO，吸收短突发帧
     uart_set_fifo_enabled(uart0, true);
 
-    // 预填充帧的静态部分（header + LEN + TYPE），运行时只需填写 DATA + CHECKSUM
+    // 预填充帧的静态部分（三字节头 57 AB 77），运行时只需填写 DATA + CHECKSUM
     g_frame_buf[0] = kFrameHdr1;
     g_frame_buf[1] = kFrameHdr2;
-    g_frame_buf[2] = static_cast<std::uint8_t>(kKeyboardFrameLen);  // LEN = total length = 8
-    g_frame_buf[3] = kTypeKeyboardEvent;                              // TYPE = 0x01
+    g_frame_buf[2] = kFrameHdr3Kb;   // 0x77 — 自定义键盘帧标识
 
     g_initialized = true;
 }
@@ -83,22 +82,20 @@ void uart_send_key_event(const usb_host::key_event& e) {
     // byte0: usage code
     // byte1: pressed (0x01 = press, 0x00 = release)
     // byte2: modifiers
-    g_frame_buf[4] = e.usage_code;
-    g_frame_buf[5] = e.pressed ? static_cast<std::uint8_t>(0x01) : static_cast<std::uint8_t>(0x00);
-    g_frame_buf[6] = e.modifiers;
+    g_frame_buf[3] = e.usage_code;
+    g_frame_buf[4] = e.pressed ? static_cast<std::uint8_t>(0x01) : static_cast<std::uint8_t>(0x00);
+    g_frame_buf[5] = e.modifiers;
 
     // ===== CHECKSUM 计算：XOR 所有前面字节 =====
-    // 包括 [0x57, 0xAB, LEN, TYPE, DATA0, DATA1, DATA2]
+    // 包括 [0x57, 0xAB, 0x77, usage, pressed, modifiers]
     std::uint8_t xor_sum = 0;
     for (std::size_t i = 0; i < kKeyboardFrameLen - 1; i++) {
         xor_sum ^= g_frame_buf[i];
     }
-    g_frame_buf[7] = xor_sum;
+    g_frame_buf[6] = xor_sum;
 
     // ===== 原子输出 =====
-    // 单次 uart_write_blocking 调用 —— 保证 8 字节连续输出，不会被其他代码干扰
-    // 注：uart_write_blocking 内部会等待 FIFO 空间；
-    //     9600 baud 下 8 字节 ≈ 8.3 ms
+    // 单次 uart_write_blocking 调用 —— 保证 7 字节连续输出，不会被其他代码干扰
     uart_write_blocking(uart0, g_frame_buf, kKeyboardFrameLen);
 }
 

@@ -29,14 +29,16 @@
 
 namespace output {
 
-// ===== CH9350L 风格帧常量 =====
+// ===== 帧常量 =====
 // 注: 使用 std::uint8_t / std::size_t 以严格符合 C++ <cstdint> 规范
 //     （消除 IDE "未定义标识符 uint8_t" 的静态分析告警）
 constexpr std::uint8_t kFrameHdr1 = 0x57;
 constexpr std::uint8_t kFrameHdr2 = 0xAB;
 
-// TYPE 定义
-constexpr std::uint8_t kTypeKeyboardEvent = 0x01;
+// 键盘数据帧使用三字节头 57 AB 77（自定义协议，与 CH9350 区分）
+constexpr std::uint8_t kFrameHdr3Kb = 0x77;
+
+// TYPE 定义（用于非键盘帧：PING/PONG/设备事件等，仍使用 57 AB 两字节头）
 constexpr std::uint8_t kTypePing          = 0x02;
 constexpr std::uint8_t kTypePong          = 0x03;
 constexpr std::uint8_t kTypeDeviceMount   = 0x04;
@@ -44,7 +46,8 @@ constexpr std::uint8_t kTypeDeviceUmount  = 0x05;
 constexpr std::uint8_t kTypeDeviceInfo    = 0x06;  // USB 设备详细信息
 
 // 帧长度常量
-constexpr std::size_t kKeyboardFrameLen   = 8;   // 2+1+1+3+1
+// 键盘帧: 57 AB 77 <usage> <pressed> <modifiers> <checksum> = 7 字节
+constexpr std::size_t kKeyboardFrameLen   = 7;   // 3+3+1
 constexpr std::size_t kPingPongFrameLen   = 6;   // 2+1+1+1+1
 constexpr std::size_t kDeviceEventFrameLen= 6;   // 2+1+1+1+1
 constexpr std::size_t kDeviceInfoFrameLen = 14;  // 2+1+1+9+1 (dev_addr+VID+PID+bInterval+itf_num+itf_protocol+instance)
@@ -57,7 +60,7 @@ constexpr std::size_t kDeviceInfoFrameLen = 14;  // 2+1+1+9+1 (dev_addr+VID+PID+
 void uart_protocol_init();
 
 // 编码并发送一个 keyboard event 二进制帧
-// 帧内容：57 AB 08 01 <usage> <pressed> <modifiers> <XOR>
+// 帧内容：57 AB 77 <usage> <pressed> <modifiers> <XOR>
 // 实现保证：
 //   - 原子调用：单次 uart_write_blocking 输出整个 frame，避免 printf 干扰
 //   - 不通过 printf 打印 key 信息
