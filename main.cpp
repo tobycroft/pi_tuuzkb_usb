@@ -8,13 +8,14 @@
 // 分层架构（严格遵守）：
 //   /usb_host   - TinyUSB host stack + HID 回调  → 仅产出 key_event struct
 //   /hid        - HID boot protocol parser        → 仅产出 key_event struct
-//   /output     - uart_protocol (二进制帧编码)     ← 唯一负责二进制编码 & UART 输出
-//               - uart_logger (文本日志)           ← 保留，默认关闭
+//   /output     - uart_protocol  (UART0 硬件初始化 + PING/PONG 轮询)
+//               - binary_encoder (轻量级 key_event → 57AB 帧编码器)
+//               - uart_logger    (文本日志，保留，默认关闭)
 //   main.cpp    - 组装层：初始化 + 回调路由 + 主循环
 
-// ENABLE_USB 默认值 = 0（可由 CMake target_compile_definitions 覆盖）
+// ENABLE_USB 默认值 = 1（HID host 已就绪；可由 CMake target_compile_definitions 覆盖）
 #ifndef ENABLE_USB
-#define ENABLE_USB 0
+#define ENABLE_USB 1
 #endif
 
 // ENABLE_DEBUG_TEXT 默认值 = 0（纯二进制模式；设为 1 可启用文本日志）
@@ -26,6 +27,7 @@
 
 #include "usb_host/usb_callbacks.h"
 #include "output/uart_protocol.h"
+#include "output/binary_encoder.h"
 #if ENABLE_USB
 #include "tusb.h"
 #include "hid/hid_parser.h"
@@ -37,12 +39,14 @@
 #endif
 
 // ============================================================================
-// key_event 路由：唯一正确路径是 output::uart_send_key_event(e)
+// key_event 路由：HID 层产生 key_event struct → 轻量级二进制编码器
+//   output::binary_encoder_send(e) 将其编码为 57AB 8 字节帧并原子发送
+//   output::uart_protocol 负责 UART0 硬件初始化（9600/8N1）与 PING/PONG 轮询
 // —— 此处不调用任何 printf / 文本日志输出 key 信息
 // ============================================================================
 static void onKeyEvent(const usb_host::key_event& e) {
-    // 严格遵守：HID 层产生 struct → 二进制协议层编码并输出
-    output::uart_send_key_event(e);
+    // 严格分层：HID 层产生 struct → binary encoder 编码 → UART0 发送
+    output::binary_encoder_send(e);
 
     // —— 注意：禁止在此处 printf 任何 key info ——
     // 若需要同时输出文本日志，请在 ENABLE_DEBUG_TEXT 下通过独立通道实现，

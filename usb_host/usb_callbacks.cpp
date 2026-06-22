@@ -1,12 +1,14 @@
 // ===== USB Host 回调管理层
-// 通过 ENABLE_USB 宏控制：
+// 通过 CMake target_compile_definitions 传入的 ENABLE_USB 宏控制：
 //   ENABLE_USB=0: 仅编译空桩实现，不链接 tinyusb host stack
 //   ENABLE_USB=1:  完整 USB Host HID 解析
-
-// —— 当前阶段：ENABLE_USB=0（调试优先，先稳定 UART 输出）
+// —— 注意：此处不再硬编码 ENABLE_USB，由 CMakeLists.txt 统一控制
 
 #ifndef ENABLE_USB
-#define ENABLE_USB 0
+// CMake 默认会通过 target_compile_definitions 传入 ENABLE_USB。
+// 若头文件被直接引入且未定义此宏，则默认回退为 1（启用），
+// 以确保用户在 HID host 就绪时能正常收到 raw keyboard event。
+#define ENABLE_USB 1
 #endif
 
 #include "usb_callbacks.h"

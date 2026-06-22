@@ -46,7 +46,7 @@ pico_sdk_init()
 #              - uart_logger.cpp（文本日志，保留，默认关闭）
 #   main.cpp   - 初始化 + onKeyEvent 路由到 uart_protocol + 主循环 + tuh_task()
 
-set(ENABLE_USB 0 CACHE STRING "Enable USB Host HID subsystem (0=disabled, 1=enabled)")
+set(ENABLE_USB 1 CACHE STRING "Enable USB Host HID subsystem (0=disabled, 1=enabled)")
 set(ENABLE_DEBUG_TEXT 0 CACHE STRING "Enable debug text output on UART0 (0=binary-only, 1=with-text)")
 
 add_executable(pi_tuuzkb_usb
@@ -57,6 +57,7 @@ add_executable(pi_tuuzkb_usb
     hid/hid_parser.cpp
     output/uart_protocol.cpp
     output/uart_logger.cpp
+    output/binary_encoder.cpp
 )
 
 # ============ PIO 程序生成 ============
