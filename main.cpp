@@ -56,9 +56,21 @@ static void onKeyEvent(const usb_host::key_event& e) {
 
 #if ENABLE_USB
 // 设备插拔事件：发送二进制帧通知（不依赖调试文本）
+// 当设备挂载时，还会发送设备详细信息（VID/PID/bInterval 等）
 static void onMount(uint8_t dev_addr, bool mounted) {
     if (mounted) {
         output::uart_send_device_mount(dev_addr);
+        
+        // 获取设备详细信息
+        uint16_t vid = 0, pid = 0;
+        if (tuh_vid_pid_get(dev_addr, &vid, &pid)) {
+            // 获取接口信息（bInterval 需要从描述符中获取，这里暂时用默认值）
+            uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, 0);
+            // bInterval: 默认值 10ms（大多数键盘使用 10ms）
+            // itf_num: 默认值 0（第一个接口）
+            // instance: 默认值 0（第一个实例）
+            output::uart_send_device_info(dev_addr, vid, pid, 10, 0, itf_protocol, 0);
+        }
     } else {
         output::uart_send_device_umount(dev_addr);
     }

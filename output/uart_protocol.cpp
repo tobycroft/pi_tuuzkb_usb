@@ -170,6 +170,33 @@ void uart_send_device_umount(std::uint8_t dev_addr) {
     uart_write_blocking(uart0, buf, kDeviceEventFrameLen);
 }
 
+void uart_send_device_info(std::uint8_t dev_addr, uint16_t vid, uint16_t pid, uint8_t bInterval, uint8_t itf_num, uint8_t itf_protocol, uint8_t instance) {
+    if (!g_initialized) return;
+
+    std::uint8_t buf[kDeviceInfoFrameLen];
+    buf[0] = kFrameHdr1;                                              // 0x57
+    buf[1] = kFrameHdr2;                                              // 0xAB
+    buf[2] = static_cast<std::uint8_t>(kDeviceInfoFrameLen);          // LEN = 0xB (11)
+    buf[3] = kTypeDeviceInfo;                                         // TYPE = 0x06
+    buf[4] = dev_addr;                                                // DATA: dev_addr
+    buf[5] = static_cast<uint8_t>(vid & 0xFF);                        // DATA: vid_low
+    buf[6] = static_cast<uint8_t>((vid >> 8) & 0xFF);                 // DATA: vid_high
+    buf[7] = static_cast<uint8_t>(pid & 0xFF);                        // DATA: pid_low
+    buf[8] = static_cast<uint8_t>((pid >> 8) & 0xFF);                 // DATA: pid_high
+    buf[9] = bInterval;                                               // DATA: bInterval
+    buf[10] = itf_num;                                                // DATA: itf_num
+    buf[11] = itf_protocol;                                           // DATA: itf_protocol
+    buf[12] = instance;                                               // DATA: instance
+
+    std::uint8_t xor_sum = 0;
+    for (std::size_t i = 0; i < kDeviceInfoFrameLen - 1; i++) {
+        xor_sum ^= buf[i];
+    }
+    buf[13] = xor_sum;
+
+    uart_write_blocking(uart0, buf, kDeviceInfoFrameLen);
+}
+
 void uart_send_frame(const std::uint8_t* data, std::size_t len) {
     if (!g_initialized || data == nullptr || len == 0) return;
     uart_write_blocking(uart0, data, len);
