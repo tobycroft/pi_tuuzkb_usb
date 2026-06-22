@@ -51,11 +51,18 @@ set(ENABLE_DEBUG_TEXT 0 CACHE STRING "Enable debug text output on UART0 (0=binar
 
 add_executable(pi_tuuzkb_usb
     main.cpp
+    src/TinyUsbManager.cpp
+    src/UsbApplication.cpp
     usb_host/usb_callbacks.cpp
     hid/hid_parser.cpp
     output/uart_protocol.cpp
     output/uart_logger.cpp
 )
+
+# ============ PIO 程序生成 ============
+# blink.pio -> blink.pio.h（生成到 build 目录，由目标编译时搜索路径提供）
+# 注意：pico_generate_pio_header 会对 target 添加依赖，必须放在 add_executable 之后
+pico_generate_pio_header(pi_tuuzkb_usb ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
 
 # 将宏传递到所有编译单元
 target_compile_definitions(pi_tuuzkb_usb PRIVATE
@@ -68,16 +75,24 @@ target_include_directories(pi_tuuzkb_usb PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/usb_host
     ${CMAKE_CURRENT_LIST_DIR}/hid
     ${CMAKE_CURRENT_LIST_DIR}/output
+    ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
 # ---- 基础链接库（始终需要）----
 # pico_stdlib = 提供 stdio_init_all / sleep_ms / to_ms_since_boot / get_absolute_time
 # hardware_uart = 提供 uart_init / uart_set_format / uart_write_blocking / uart_set_fifo_enabled
 # hardware_gpio = 提供 gpio_set_function（配置 UART0 引脚）
+# hardware_pio = 提供 pio_add_program / pio_sm_*（TinyUsbManager/UsbApplication 使用 PIO 闪烁）
+# hardware_dma = 提供 dma_claim_unused_channel / dma_channel_configure
+# hardware_timer = 提供 hardware_timer 标头（get_absolute_time 在 pico_stdlib 内，但头文件搜索需要）
 target_link_libraries(pi_tuuzkb_usb
     pico_stdlib
     hardware_uart
     hardware_gpio
+    hardware_pio
+    hardware_dma
+    hardware_timer
+    tinyusb_device
 )
 
 # ---- USB Host 相关链接库（仅 ENABLE_USB=1 时）----

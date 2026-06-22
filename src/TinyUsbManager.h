@@ -7,8 +7,7 @@
 #endif
 
 #include "pico/stdlib.h"
-#include <stdbool.h>
-#include <stdint.h>
+#include <cstdint>
 
 // 前置声明
 typedef void (*ConnectionCallback)(bool connected, void* user_data);
