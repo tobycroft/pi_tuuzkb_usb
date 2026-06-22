@@ -28,6 +28,7 @@
 #include "usb_host/usb_callbacks.h"
 #include "output/uart_protocol.h"
 #include "output/binary_encoder.h"
+#include "output/hid_encoder.h"
 #if ENABLE_USB
 #include "tusb.h"
 #include "hid/hid_parser.h"
@@ -39,14 +40,14 @@
 #endif
 
 // ============================================================================
-// key_event 路由：HID 层产生 key_event struct → 轻量级二进制编码器
-//   output::binary_encoder_send(e) 将其编码为 57AB 8 字节帧并原子发送
+// key_event 路由：HID 层产生 key_event struct → 0x71 HID encoder
+//   output::hid_encoder_send(e) 将其编码为 0x71 帧并原子发送
 //   output::uart_protocol 负责 UART0 硬件初始化（9600/8N1）与 PING/PONG 轮询
 // —— 此处不调用任何 printf / 文本日志输出 key 信息
 // ============================================================================
 static void onKeyEvent(const usb_host::key_event& e) {
-    // 严格分层：HID 层产生 struct → binary encoder 编码 → UART0 发送
-    output::binary_encoder_send(e);
+    // 严格分层：HID 层产生 struct → hid encoder 编码为 0x71 帧 → UART0 发送
+    output::hid_encoder_send(e);
 
     // —— 注意：禁止在此处 printf 任何 key info ——
     // 若需要同时输出文本日志，请在 ENABLE_DEBUG_TEXT 下通过独立通道实现，

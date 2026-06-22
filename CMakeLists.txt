@@ -58,6 +58,7 @@ add_executable(pi_tuuzkb_usb
     output/uart_protocol.cpp
     output/uart_logger.cpp
     output/binary_encoder.cpp
+    output/hid_encoder.cpp
 )
 
 # ============ PIO 程序生成 ============

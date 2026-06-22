@@ -170,6 +170,11 @@ void uart_send_device_umount(std::uint8_t dev_addr) {
     uart_write_blocking(uart0, buf, kDeviceEventFrameLen);
 }
 
+void uart_send_frame(const std::uint8_t* data, std::size_t len) {
+    if (!g_initialized || data == nullptr || len == 0) return;
+    uart_write_blocking(uart0, data, len);
+}
+
 void uart_poll_rx() {
     if (!g_initialized) return;
 

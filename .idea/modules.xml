@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/pi_tuuzkb_usb.iml" filepath="$PROJECT_DIR$/.idea/pi_tuuzkb_usb.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/pi_tuuzkb_usb.CMake.iml" filepath="$PROJECT_DIR$/.idea/pi_tuuzkb_usb.CMake.iml" />
     </modules>
   </component>
 </project>

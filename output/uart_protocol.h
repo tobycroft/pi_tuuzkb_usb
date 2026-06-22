@@ -76,6 +76,10 @@ void uart_send_device_mount(std::uint8_t dev_addr);
 // 帧：57 AB 06 05 <dev_addr> <XOR>
 void uart_send_device_umount(std::uint8_t dev_addr);
 
+// 通用帧发送接口（供 hid_encoder 等模块使用）
+// 直接发送原始字节流到 UART0
+void uart_send_frame(const std::uint8_t* data, std::size_t len);
+
 // 非阻塞 UART RX 轮询：处理下行 PING/PONG 命令
 // 每次调用最多读取并处理 1 字节
 void uart_poll_rx();

@@ -36,20 +36,16 @@
 #include <cstdint>
 #include <cstddef>
 #include "../usb_host/usb_callbacks.h"
+#include "uart_protocol.h"  // 使用 uart_protocol.h 中定义的 kFrameHdr1/kFrameHdr2
 
 namespace output {
 
-// 57AB keyboard event 帧常量（与 uart_protocol.h 保持一致，
-// 此处独立定义以避免 encoder 模块强依赖 uart_protocol 头文件）
-constexpr std::uint8_t kFrameHdr1    = 0x57;
-constexpr std::uint8_t kFrameHdr2    = 0xAB;
-constexpr std::uint8_t kFrameLen     = 0x08;
-constexpr std::uint8_t kFrameTypeKey = 0x01;
-constexpr std::size_t  kFrameSize    = 8;
-
-// pressed 字段规范化值：bool 可能非 0/1，必须显式规范化
-constexpr std::uint8_t kPressedDown  = 0x01;
-constexpr std::uint8_t kPressedUp    = 0x00;
+// BinaryEncoder 使用的常量（8 字节帧，XOR 校验）
+constexpr std::size_t  kFrameSize        = 8;      // 固定 8 字节
+constexpr std::uint8_t kFrameLen         = 0x08;   // LEN 字段值
+constexpr std::uint8_t kFrameTypeKey     = 0x01;   // TYPE = keyboard
+constexpr std::uint8_t kPressedDown      = 0x01;   // 按下
+constexpr std::uint8_t kPressedUp        = 0x00;   // 释放
 
 // ===== 二进制编码器类 =====
 // 负责把 key_event 编码为 8 字节帧并原子写入 UART0。
