@@ -126,10 +126,22 @@ void uart_send_pong(std::uint8_t payload) {
 void uart_send_ping() {
     if (!g_initialized) return;
 
-    // 4 字节原始帧：57 AB 10 03
-    // 无 LEN / TYPE / DATA / CHECKSUM，直接发送
-    const std::uint8_t raw_ping[] = {0x57, 0xAB, 0x10, 0x03};
-    uart_write_blocking(uart0, raw_ping, sizeof(raw_ping));
+    // 标准协议帧：57 AB 06 02 [payload] [checksum]
+    // LEN = 0x06 (总帧长度), TYPE = 0x02 (PING)
+    std::uint8_t buf[kPingPongFrameLen];
+    buf[0] = kFrameHdr1;                                      // 0x57
+    buf[1] = kFrameHdr2;                                      // 0xAB
+    buf[2] = static_cast<std::uint8_t>(kPingPongFrameLen);    // LEN = 6
+    buf[3] = kTypePing;                                       // TYPE = 0x02
+    buf[4] = 0x00;                                            // DATA: payload = 0x00
+
+    std::uint8_t xor_sum = 0;
+    for (std::size_t i = 0; i < kPingPongFrameLen - 1; i++) {
+        xor_sum ^= buf[i];
+    }
+    buf[5] = xor_sum;
+
+    uart_write_blocking(uart0, buf, kPingPongFrameLen);
 }
 
 void uart_send_device_mount(std::uint8_t dev_addr) {
