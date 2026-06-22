@@ -1,5 +1,5 @@
-#ifndef TUSB_CONFIG_H_
-#define TUSB_CONFIG_H
+#ifndef TUSB_CONFIG
+#define TUSB_CONFIG
 
 // ===== TinyUSB Host Stack 配置 =====
 // 本项目 RP2040 作为 USB HOST，用于连接键盘接收器
