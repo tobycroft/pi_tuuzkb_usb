@@ -113,17 +113,58 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
     const uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
     if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
-        // 分配 parser slot
         auto* slot = usb_host::findOrAllocSlot(dev_addr, instance, true);
         if (slot != nullptr) {
             usb_host::g_mounted++;
+            
             if (usb_host::g_mount_cb != nullptr) {
-                usb_host::g_mount_cb(dev_addr, true);
+                usb_host::device_info info = {};
+                info.dev_addr = dev_addr;
+                info.instance = instance;
+                info.itf_protocol = itf_protocol;
+                
+                tuh_vid_pid_get(dev_addr, &info.vid, &info.pid);
+                
+                uint8_t buffer[512];
+                uint16_t len = tuh_descriptor_get_configuration_sync(dev_addr, 0, buffer, sizeof(buffer));
+                if (len > 9) {
+                    const uint8_t* p = buffer + 9;
+                    while (p < buffer + len) {
+                        uint8_t desc_type = p[1];
+                        uint8_t desc_len = p[0];
+                        
+                        if (desc_type == TUSB_DESC_INTERFACE) {
+                            uint8_t itf_num = p[2];
+                            uint8_t itf_prot = p[5];
+                            if (itf_prot == HID_ITF_PROTOCOL_KEYBOARD) {
+                                info.itf_num = itf_num;
+                                p += desc_len;
+                                while (p < buffer + len) {
+                                    if (p[1] == TUSB_DESC_ENDPOINT) {
+                                        const tusb_desc_endpoint_t* ep = (const tusb_desc_endpoint_t*)p;
+                                        if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
+                                            info.bInterval = ep->bInterval;
+                                            break;
+                                        }
+                                    }
+                                    p += p[0];
+                                }
+                                break;
+                            }
+                        }
+                        p += desc_len;
+                    }
+                }
+                
+                if (info.bInterval == 0) {
+                    info.bInterval = 10;
+                }
+                
+                usb_host::g_mount_cb(info, true);
             }
         }
     }
 
-    // 启动 report 接收（HID class 必须调用，否则不会收到数据）
     tuh_hid_receive_report(dev_addr, instance);
 }
 
@@ -135,7 +176,12 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
             usb_host::g_mounted--;
         }
         if (usb_host::g_mount_cb != nullptr) {
-            usb_host::g_mount_cb(dev_addr, false);
+            usb_host::device_info info = {};
+            info.dev_addr = dev_addr;
+            info.instance = instance;
+            info.itf_protocol = itf_protocol;
+            tuh_vid_pid_get(dev_addr, &info.vid, &info.pid);
+            usb_host::g_mount_cb(info, false);
         }
     }
 }
