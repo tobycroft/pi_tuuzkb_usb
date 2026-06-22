@@ -3,6 +3,11 @@
 
 // ===== TinyUSB Host Stack 配置 =====
 // 本项目 RP2040 作为 USB HOST，用于连接键盘接收器
+//
+// 当 ENABLE_USB=0 时，TinyUSB 库不参与链接，
+// tusb_option.h 等内部头文件不可访问，因此整个配置体用宏守卫包裹
+
+#if ENABLE_USB
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,5 +92,7 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+#endif // ENABLE_USB
 
 #endif // TUSB_CONFIG_H
