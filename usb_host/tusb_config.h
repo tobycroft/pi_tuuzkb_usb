@@ -1,4 +1,4 @@
-#ifndef TUSB_CONFIG_H
+#ifndef TUSB_CONFIG_H_
 #define TUSB_CONFIG_H
 
 // ===== TinyUSB Host Stack 配置 =====

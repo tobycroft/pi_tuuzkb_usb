@@ -1,8 +1,23 @@
 #include "TinyUsbManager.h"
 
-// 仅在 .cpp 文件中包含 tinyusb 头文件
+// ===== 说明 =====
+// 本文件历史用途为 USB Device 栈管理器（CDC 心跳）。
+// 当前项目目标为 USB Host HID keyboard → CH9350L 风格二进制协议桥，
+// 严格禁用 USB Device stack（tud_* API）。
+//
+// 因此：
+//   - ENABLE_USB=1 时保留原始 TinyUSB 相关代码（虽然仍使用 device API，
+//     但仅作为遗留类存在；主流程 main.cpp 使用 tuh_* host API）
+//   - ENABLE_USB=0 时整个实现为空桩，不 include tusb.h，确保编译通过
+
+#ifndef ENABLE_USB
+#define ENABLE_USB 0
+#endif
+
+#if ENABLE_USB
 #include "tusb.h"
 #include <cstdio>
+#endif
 
 namespace driver {
 
@@ -22,6 +37,7 @@ bool TinyUsbManager::initialize() {
         return true;
     }
 
+#if ENABLE_USB
 #if CFG_TUD_ENABLED
     // tinyusb 由 pico_stdio_usb 自动初始化（Device 模式）
     initialized_ = true;
@@ -32,6 +48,10 @@ bool TinyUsbManager::initialize() {
     initialized_ = true;
     std::printf("[TinyUsbManager] USB host stack ready (Host-mode stub)\n");
 #endif
+#else
+    // ENABLE_USB=0：不依赖 tusb.h，直接标记为就绪
+    initialized_ = true;
+#endif
     return true;
 }
 
@@ -40,6 +60,7 @@ void TinyUsbManager::task() {
         return;
     }
 
+#if ENABLE_USB
 #if CFG_TUD_ENABLED
     // Device 模式：通过 tud_task 的挂载状态判断 USB 连接
     tud_task();
@@ -55,6 +76,10 @@ void TinyUsbManager::task() {
     (void)connection_cb_;
     (void)user_data_;
 #endif
+#else
+    (void)connection_cb_;
+    (void)user_data_;
+#endif
 }
 
 bool TinyUsbManager::isConnected() const {
@@ -67,7 +92,7 @@ void TinyUsbManager::setConnectionCallback(ConnectionCallback cb, void* user_dat
 }
 
 void TinyUsbManager::sendCdcData(const char* data, uint32_t length) {
-#if CFG_TUD_ENABLED
+#if ENABLE_USB && CFG_TUD_ENABLED
     if (!initialized_ || !connected_) {
         return;
     }
@@ -77,7 +102,7 @@ void TinyUsbManager::sendCdcData(const char* data, uint32_t length) {
         tud_cdc_write_flush();
     }
 #else
-    // Host 模式下无 Device 侧 CDC 通道，直接忽略发送请求
+    // Host 模式或 ENABLE_USB=0：无 Device 侧 CDC 通道，直接忽略发送请求
     (void)data;
     (void)length;
     (void)initialized_;

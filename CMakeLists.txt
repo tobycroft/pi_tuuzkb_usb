@@ -46,7 +46,7 @@ pico_sdk_init()
 #              - uart_logger.cpp（文本日志，保留，默认关闭）
 #   main.cpp   - 初始化 + onKeyEvent 路由到 uart_protocol + 主循环 + tuh_task()
 
-set(ENABLE_USB 1 CACHE STRING "Enable USB Host HID subsystem (0=disabled, 1=enabled)")
+set(ENABLE_USB 0 CACHE STRING "Enable USB Host HID subsystem (0=disabled, 1=enabled)")
 set(ENABLE_DEBUG_TEXT 0 CACHE STRING "Enable debug text output on UART0 (0=binary-only, 1=with-text)")
 
 add_executable(pi_tuuzkb_usb
@@ -85,6 +85,7 @@ target_include_directories(pi_tuuzkb_usb PRIVATE
 # hardware_pio = 提供 pio_add_program / pio_sm_*（TinyUsbManager/UsbApplication 使用 PIO 闪烁）
 # hardware_dma = 提供 dma_claim_unused_channel / dma_channel_configure
 # hardware_timer = 提供 hardware_timer 标头（get_absolute_time 在 pico_stdlib 内，但头文件搜索需要）
+# 注意：tinyusb_device 不链接 —— 本项目仅做 USB Host，严禁 USB Device stack
 target_link_libraries(pi_tuuzkb_usb
     pico_stdlib
     hardware_uart
@@ -92,7 +93,6 @@ target_link_libraries(pi_tuuzkb_usb
     hardware_pio
     hardware_dma
     hardware_timer
-    tinyusb_device
 )
 
 # ---- USB Host 相关链接库（仅 ENABLE_USB=1 时）----

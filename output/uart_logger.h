@@ -3,8 +3,12 @@
 
 // ===== UART Logger 输出层 =====
 // 使用 UART0 (GPIO0 TX / GPIO1 RX)
-// - 波特率: 115200, 8N1
+// - 波特率: 9600, 8N1
 // - 输出原始 HID key_event 文本日志
+//
+// 注意：
+//   本模块作为调试辅助存在，默认关闭（ENABLE_DEBUG_TEXT=0 时不参与 stdio 初始化）。
+//   UART0 引脚常量仅在 uart_logger.cpp 内部定义，避免与 uart_protocol.h 的符号冲突。
 
 #if __cplusplus < 201703L
 #error "uart_logger requires C++17 or later"
@@ -15,13 +19,6 @@
 #include "../usb_host/usb_callbacks.h"
 
 namespace output {
-
-// UART0 引脚 (Pico 板载 UART0:
-//   TX = GPIO0 (Pin 1)
-//   RX = GPIO1 (Pin 2)
-constexpr uint8_t kUartTXPin = 0;
-constexpr uint8_t kUartRXPin = 1;
-constexpr uint32_t kBaudRate = 9600;
 
 class UartLogger {
 public:

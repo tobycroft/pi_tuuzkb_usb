@@ -10,10 +10,6 @@
 //   └─────────┴─────────┴─────┴──────┴──────────────┴──────────┘
 //
 // LEN = total frame length = 2 (header) + 1 (LEN) + 1 (TYPE) + N (DATA) + 1 (CHECKSUM)
-//     对 keyboard event（DATA=3B）: LEN = 8
-//
-// TYPE = 0x01 —— keyboard event
-// DATA = [usage_code:1B][pressed:1B][modifiers:1B] （共 3 字节）
 //
 // CHECKSUM = XOR of [0x57] ^ [0xAB] ^ [LEN] ^ [TYPE] ^ [DATA0] ^ ... ^ [DATAN-1]
 //
@@ -21,7 +17,7 @@
 //   - USB HID 层只产生 key_event struct（不关心 UART 编码）
 //   - 本模块负责 frame 编码 & 输出
 //   - 不使用 printf 输出 key 信息（仅调试信息可走 printf）
-//   - 输出到 UART0：TX=GPIO0, RX=GPIO1, 115200/8N1
+//   - 输出到 UART0：TX=GPIO0, RX=GPIO1, 9600/8N1
 
 #if __cplusplus < 201703L
 #error "uart_protocol requires C++17 or later"
@@ -40,43 +36,21 @@ constexpr std::uint8_t kFrameHdr1 = 0x57;
 constexpr std::uint8_t kFrameHdr2 = 0xAB;
 
 // TYPE 定义
-constexpr std::uint8_t kTypeKeyboardEvent = 0x01;  // RP2040 → Host: 按键事件
-constexpr std::uint8_t kTypePing          = 0x02;  // Host → RP2040: PING 请求
-constexpr std::uint8_t kTypePong          = 0x03;  // RP2040 → Host: PONG 回应
-constexpr std::uint8_t kTypeDeviceMount   = 0x04;  // RP2040 → Host: USB 设备挂载
-constexpr std::uint8_t kTypeDeviceUmount  = 0x05;  // RP2040 → Host: USB 设备卸载
+constexpr std::uint8_t kTypeKeyboardEvent = 0x01;
+constexpr std::uint8_t kTypePing          = 0x02;
+constexpr std::uint8_t kTypePong          = 0x03;
+constexpr std::uint8_t kTypeDeviceMount   = 0x04;
+constexpr std::uint8_t kTypeDeviceUmount  = 0x05;
 
-// keyboard event DATA 长度（固定 3 字节）
-constexpr std::size_t kKeyboardDataLen = 3;
-
-// PING/PONG DATA 长度（固定 1 字节 payload）
-constexpr std::size_t kPingPongDataLen = 1;
-
-// Device mount/umount DATA 长度（1 字节: dev_addr）
-constexpr std::size_t kDeviceEventDataLen = 1;
-
-// Device event frame 总长度
-// 2(header) + 1(len) + 1(type) + 1(data) + 1(checksum) = 6
-constexpr std::size_t kDeviceEventFrameLen =
-    2 + 1 + 1 + kDeviceEventDataLen + 1;  // 6
-
-// 一个 keyboard event frame 的总长度
-// 2(header) + 1(len) + 1(type) + 3(data) + 1(checksum) = 8
-constexpr std::size_t kKeyboardFrameLen =
-    2 + 1 + 1 + kKeyboardDataLen + 1;  // 8
-
-// PING/PONG frame 总长度
-// 2(header) + 1(len) + 1(type) + 1(data) + 1(checksum) = 6
-constexpr std::size_t kPingPongFrameLen =
-    2 + 1 + 1 + kPingPongDataLen + 1;  // 6
-
-// —— UART0 引脚和波特率定义为实现细节，保存在 uart_protocol.cpp ——
-// （避免与 output/uart_logger.h 中已存在的同名常量冲突，二者共享同一硬件 UART0）
+// 帧长度常量
+constexpr std::size_t kKeyboardFrameLen   = 8;   // 2+1+1+3+1
+constexpr std::size_t kPingPongFrameLen   = 6;   // 2+1+1+1+1
+constexpr std::size_t kDeviceEventFrameLen= 6;   // 2+1+1+1+1
 
 // ===== 公共 API =====
 
 // 初始化 UART0 协议层（需在发送任何帧之前调用一次）
-// - UART0: 115200/8N1, TX=GPIO0, RX=GPIO1
+// - UART0: 9600/8N1, TX=GPIO0, RX=GPIO1
 // - FIFO enabled for stable output timing
 void uart_protocol_init();
 
@@ -87,26 +61,23 @@ void uart_protocol_init();
 //   - 不通过 printf 打印 key 信息
 void uart_send_key_event(const usb_host::key_event& e);
 
-// 发送 PONG 回应帧
-// 帧内容：57 AB 06 03 <payload> <XOR>
-// payload: 收到的 PING payload，原样回显
-void uart_send_pong(std::uint8_t payload);
-
-// 发送 PING 帧（RP2040 主动发向主机，心跳/存活检测）
-// 帧内容：57 AB 10 03（4 字节原始帧，无 LEN/TYPE/CHECKSUM）
+// 发送一个 PING 帧（上行 TX 原始帧：57 AB 10 03）
 void uart_send_ping();
 
-// 发送 USB 设备挂载通知帧
-// 帧内容：57 AB 06 04 <dev_addr> <XOR>
+// 发送一个 PONG 帧（DATA 携带 payload）
+// 帧：57 AB 06 03 <payload> <XOR>
+void uart_send_pong(std::uint8_t payload);
+
+// 发送设备挂载通知帧
+// 帧：57 AB 06 04 <dev_addr> <XOR>
 void uart_send_device_mount(std::uint8_t dev_addr);
 
-// 发送 USB 设备卸载通知帧
-// 帧内容：57 AB 06 05 <dev_addr> <XOR>
+// 发送设备卸载通知帧
+// 帧：57 AB 06 05 <dev_addr> <XOR>
 void uart_send_device_umount(std::uint8_t dev_addr);
 
-// UART RX 轮询（在主循环中调用）
-// 状态机解析接收帧，自动处理 PING → PONG
-// 非阻塞：每次调用最多读取 1 字节，逐步推进状态
+// 非阻塞 UART RX 轮询：处理下行 PING/PONG 命令
+// 每次调用最多读取并处理 1 字节
 void uart_poll_rx();
 
 // 是否已初始化（用于上层断言 / 调试检查）
