@@ -86,6 +86,7 @@
 // ============================================================================
 // #include 系统/库头文件
 // ============================================================================
+#include "pico/stdlib.h"          // Pico SDK: sleep_ms
 #include "../hid/hid_parser.h"  // 项目内部头文件：HID 报告解析器
 #include "tusb.h"               // TinyUSB 主头文件：提供 USB Host API
 #include "class/hid/hid.h"      // TinyUSB HID 类头文件：HID 协议定义
@@ -486,6 +487,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 
             // 调用设备挂载回调（发送 0x71）
             usb_host::g_mount_cb(info, true);
+
+            // 等待 1 秒后再获取 USB 字符串描述符（确保设备完全准备好）
+            sleep_ms(1000);
 
             // 尝试获取 USB 字符串描述符（发送 0x72）
             usb_host::device_strings strings = {};
