@@ -380,295 +380,106 @@ extern "C" {
 //   desc_len - 报告描述符长度（通常为 0）
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                       uint8_t const* desc_report, uint16_t desc_len) {
-    // ============================================================================
-    // (void) 变量 - 显式声明不使用
-    // ============================================================================
-    // (void)desc_report; 的意思是"我收到了这个参数但不使用"
-    // 这是为了避免编译器产生"未使用的参数"警告
-    //
-    // 对比 Go：
-    // Go 可以直接忽略返回值，不需要这样做
-    // 例如：_ = desc_report
-    // ============================================================================
     (void)desc_report;
     (void)desc_len;
 
-    // 获取接口协议，判断是键盘还是鼠标还是其他
-    // ============================================================================
-    // const 变量
-    // ============================================================================
-    // const 类型 变量名 = 初始值;
-    // 表示这个变量的值不能被修改
-    //
-    // 对比 Go：
-    // Go: const Pi float64 = 3.14
-    // C++: const float Pi = 3.14;
-    //
-    // 但 const 在 C++ 中更复杂：
-    // const int* p;    // p 指向的 int 不能通过 p 修改
-    // int const* p;    // 同上
-    // int* const p;    // p 指针本身不能修改
-    // ============================================================================
     const uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-    // ============================================================================
-    // if-else 条件分支
-    // ============================================================================
-    // if (条件1) { ... }
-    // else if (条件2) { ... }
-    // else { ... }
-    //
-    // 对比 Go：
-    // Go:
-    // if itf_protocol == HID_ITF_PROTOCOL_KEYBOARD {
-    //     ...
-    // } else {
-    //     ...
-    // }
-    //
-    // 主要区别：C++ 需要括号，Go 不需要
-    // ============================================================================
-    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
-        // 只有键盘设备才需要分配解析器槽位
-        // ============================================================================
-        // auto* - 自动类型推断
-        // ============================================================================
-        // auto* 变量名 = 表达式;
-        // 编译器会自动推断变量的类型
-        //
-        // 对比 Go：
-        // Go 使用 := 操作符隐式声明和推断类型
-        // C++11 引入了 auto 关键字实现类似功能
-        //
-        // 例：
-        // auto* slot = findOrAllocSlot(...);
-        // 编译器推断 slot 是 ParserSlot* 类型
-        // ============================================================================
-        auto* slot = usb_host::findOrAllocSlot(dev_addr, instance, true);
-        if (slot != nullptr) {
-            // ============================================================================
-            // ++ 运算符 - 自增
-            // ============================================================================
-            // ++变量  - 先自增，再使用变量的值
-            // 变量++  - 先使用变量的值，再自增
-            //
-            // 对比 Go：
-            // Go 只有 ++变量，没有 变量++
-            // 而且 ++ 是语句不是表达式
-            // ============================================================================
-            usb_host::g_mounted++;
-
-            // ============================================================================
-            // if (回调 != nullptr) - 空指针检查
-            // ============================================================================
-            // 在调用回调函数之前，必须检查它是否为 nullptr
-            // 否则会导致程序崩溃（空指针解引用）
-            //
-            // 对比 Go：
-            // Go 不需要检查 nil，因为 Go 会自动检查
-            // 如果调用 nil 函数，Go 会 panic
-            // C++ 需要手动检查，这是 C++ 的危险之处
-            // ============================================================================
-            if (usb_host::g_mount_cb != nullptr) {
-                // 构造设备信息结构体
-                usb_host::device_info info = {};
-                // ============================================================================
-                // 结构体成员赋值
-                // ============================================================================
-                // 结构体变量.成员 = 值;
-                //
-                // 对比 Go：
-                // Go: info.DevAddr = dev_addr
-                // C++: info.dev_addr = dev_addr;
-                //
-                // 几乎一样
-                // ============================================================================
-                info.dev_addr = dev_addr;
-                info.instance = instance;
-                info.itf_protocol = itf_protocol;
-
-                // 获取设备的 VID 和 PID
-                // ============================================================================
-                // & 运算符 - 取地址
-                // ============================================================================
-                // &变量 返回变量的内存地址
-                //
-                // 对比 Go：
-                // Go 的取地址是隐式的，不需要操作符
-                // 但 Go 的 map、slice、channel 是引用类型
-                // C++ 需要手动使用指针或引用
-                // ============================================================================
-                tuh_vid_pid_get(dev_addr, &info.vid, &info.pid);
-
-                // 获取设备配置描述符，解析 bInterval
-                // USB 规范规定 HID 中断端点有 bInterval 字段
-                // ============================================================================
-                // 数组声明
-                // ============================================================================
-                // 类型 变量名[大小];
-                // uint8_t buffer[512];  // 512 字节的数组
-                //
-                // 对比 Go：
-                // Go: buffer := [512]byte{}
-                // C++: uint8_t buffer[512] = {};
-                //
-                // 初始化为空数组（所有元素为 0）
-                // ============================================================================
-                uint8_t buffer[512];
-                // ============================================================================
-                // sizeof 运算符
-                // ============================================================================
-                // sizeof(变量) - 返回变量占用的字节数
-                // sizeof(类型) - 返回该类型占用的字节数
-                // sizeof(buffer) = 512
-                //
-                // 对比 Go：
-                // Go: unsafe.Sizeof(buffer)  // 需要导入 unsafe 包
-                // 或者直接用 len(buffer)
-                // ============================================================================
-                uint16_t len = tuh_descriptor_get_configuration_sync(
-                    dev_addr, 0, buffer, sizeof(buffer));
-
-                // 遍历配置描述符，查找键盘接口的 bInterval
-                // ============================================================================
-                // if (条件) { ... }
-                // ============================================================================
-                // 条件可以是任何返回布尔值的表达式
-                // len > 9 表示配置描述符至少有 9 字节（最小配置描述符长度）
-                if (len > 9) {
-                    // p 指向描述符数据，从第 9 字节开始（跳过配置描述符本身）
-                    const uint8_t* p = buffer + 9;
-
-                    // ============================================================================
-                    // while 循环
-                    // ============================================================================
-                    // while (条件) { 循环体 }
-                    //
-                    // 对比 Go：
-                    // Go:
-                    // for p < buffer+len {  // for 是 Go 唯一的循环关键字
-                    //     ...
-                    // }
-                    //
-                    // C++ 有 for、while、do-while 三种循环
-                    // ============================================================================
-                    while (p < buffer + len) {
-                        // 提取描述符类型和长度
-                        // ============================================================================
-                        // 指针运算
-                        // ============================================================================
-                        // 指针 + n   - 指针向后移动 n 个元素大小
-                        // 指针 - n   - 指针向前移动 n 个元素大小
-                        // 指针 - 指针 - 两个指针的距离（元素个数）
-                        //
-                        // 注意：指针运算不是简单的地址加减
-                        // p[1] 等价于 *(p + 1)
-                        //
-                        // 对比 Go：
-                        // Go 不支持指针运算，只有 + -
-                        // Go: p[1] 也是支持的
-                        // ============================================================================
-                        uint8_t desc_type = p[1];
-                        uint8_t desc_len = p[0];
-
-                        // ============================================================================
-                        // switch-case 多分支
-                        // ============================================================================
-                        // switch (表达式) {
-                        //     case 值1: ...; break;
-                        //     case 值2: ...; break;
-                        //     default: ...;
-                        // }
-                        //
-                        // 对比 Go：
-                        // Go 的 switch 更强大：
-                        // 1. 不需要 break（默认不穿透）
-                        // 2. 可以有条件 case
-                        // 3. switch 后面可以没有表达式（相当于 if-else 链）
-                        // ============================================================================
-                        if (desc_type == TUSB_DESC_INTERFACE) {
-                            uint8_t itf_num = p[2];
-                            uint8_t itf_prot = p[5];
-                            if (itf_prot == HID_ITF_PROTOCOL_KEYBOARD) {
-                                info.itf_num = itf_num;
-                                // 跳过接口描述符，开始遍历端点描述符
-                                p += desc_len;
-                                while (p < buffer + len) {
-                                    // 检查是否是端点描述符
-                                    if (p[1] == TUSB_DESC_ENDPOINT) {
-                                        // 转换为端点描述符结构体指针
-                                        // ============================================================================
-                                        // const 类型* - 指向常量的指针
-                                        // ============================================================================
-                                        // const tusb_desc_endpoint_t* ep;
-                                        // 表示 ep 指向一个 tusb_desc_endpoint_t
-                                        // 而且通过 ep 不能修改它指向的内容
-                                        //
-                                        // 如果没有 const：
-                                        // tusb_desc_endpoint_t* ep;
-                                        // 表示 ep 指向 tusb_desc_endpoint_t，可以通过 ep 修改内容
-                                        // ============================================================================
-                                        const tusb_desc_endpoint_t* ep =
-                                            (const tusb_desc_endpoint_t*)p;
-
-                                        // 检查是否是中断端点（IN 方向）
-                                        // ============================================================================
-                                        // . 成员访问
-                                        // ============================================================================
-                                        // 结构体指针->成员 等价于 (*结构体指针).成员
-                                        // ep->bmAttributes 等价于 (*ep).bmAttributes
-                                        //
-                                        // 对比 Go：
-                                        // Go 只有 . 运算符，因为 Go 没有指针运算
-                                        // structPtr.Field
-                                        // ============================================================================
-                                        if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
-                                            // 找到中断端点，读取 bInterval
-                                            info.bInterval = ep->bInterval;
-                                            break;  // 跳出内层 while 循环
-                                        }
-                                    }
-                                    p += p[0];  // 移动到下一个描述符
-                                }
-                                break;  // 跳出外层 while 循环
-                            }
-                        }
-                        p += desc_len;  // 移动到下一个描述符
-                    }
-                }
-
-                // 如果没有找到 bInterval，设置默认值 10ms
-                // 某些设备可能不报告 bInterval，需要提供合理默认值
-                if (info.bInterval == 0) {
-                    info.bInterval = 11;
-                }
-
-                // 调用设备挂载回调，通知上层设备已插入
-                // ============================================================================
-                // 函数调用
-                // ============================================================================
-                // 函数名(参数1, 参数2, ...);
-                // 如果函数返回非 void，可以直接使用返回值
-                //
-                // 对比 Go：
-                // Go: result := function(arg1, arg2)
-                // C++: auto result = function(arg1, arg2);
-                //      function(arg1, arg2);  // 不使用返回值
-                // ============================================================================
-                usb_host::g_mount_cb(info, true);
+    // 处理键盘和鼠标设备（HID boot protocol 设备）
+    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD || 
+        itf_protocol == HID_ITF_PROTOCOL_MOUSE) {
+        
+        // 键盘设备需要分配解析器槽位，鼠标设备不需要（暂不解析鼠标数据）
+        if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
+            auto* slot = usb_host::findOrAllocSlot(dev_addr, instance, true);
+            if (slot != nullptr) {
+                usb_host::g_mounted++;
             }
+        }
+
+        // 构造完整的设备信息结构体
+        if (usb_host::g_mount_cb != nullptr) {
+            usb_host::device_info info = {};
+            info.dev_addr = dev_addr;
+            info.instance = instance;
+            info.itf_protocol = itf_protocol;
+
+            // 获取 VID/PID
+            tuh_vid_pid_get(dev_addr, &info.vid, &info.pid);
+
+            // 获取设备描述符（完整）
+            tusb_desc_device_t dev_desc;
+            if (tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc)) == sizeof(dev_desc)) {
+                info.bcd_usb = dev_desc.bcdUSB;
+                info.b_device_class = dev_desc.bDeviceClass;
+                info.b_device_subclass = dev_desc.bDeviceSubClass;
+                info.b_device_protocol = dev_desc.bDeviceProtocol;
+                info.b_max_packet_size0 = dev_desc.bMaxPacketSize0;
+                info.bcd_device = dev_desc.bcdDevice;
+            }
+
+            // 获取配置描述符，解析接口和端点信息
+            uint8_t buffer[512];
+            uint16_t len = tuh_descriptor_get_configuration_sync(
+                dev_addr, 0, buffer, sizeof(buffer));
+
+            if (len > 9) {
+                const uint8_t* p = buffer + 9;  // 跳过配置描述符本身（9字节）
+
+                // 先从配置描述符头部提取字段
+                info.b_num_interfaces = buffer[4];
+                info.b_configuration_value = buffer[5];
+                info.bm_attributes = buffer[7];
+                info.b_max_power = buffer[8];
+
+                // 遍历描述符，查找当前接口的详细信息
+                while (p < buffer + len) {
+                    uint8_t desc_type = p[1];
+                    uint8_t desc_len = p[0];
+
+                    if (desc_type == TUSB_DESC_INTERFACE) {
+                        uint8_t itf_num = p[2];
+                        uint8_t itf_prot = p[5];
+                        
+                        // 找到当前 HID 接口
+                        if (itf_prot == itf_protocol) {
+                            info.itf_num = itf_num;
+                            info.b_interface_class = p[4];
+                            info.b_interface_subclass = p[5];
+
+                            // 跳过接口描述符，查找端点描述符
+                            p += desc_len;
+                            while (p < buffer + len) {
+                                if (p[1] == TUSB_DESC_ENDPOINT) {
+                                    const tusb_desc_endpoint_t* ep =
+                                        (const tusb_desc_endpoint_t*)p;
+
+                                    // 检查是否是中断端点（IN 方向）
+                                    if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
+                                        info.b_interval = ep->bInterval;
+                                        break;
+                                    }
+                                }
+                                p += p[0];
+                            }
+                            break;
+                        }
+                    }
+                    p += desc_len;
+                }
+            }
+
+            // 如果没有找到 bInterval，设置默认值
+            if (info.b_interval == 0) {
+                info.b_interval = 10;  // HID 默认轮询间隔 10ms
+            }
+
+            // 调用设备挂载回调
+            usb_host::g_mount_cb(info, true);
         }
     }
 
-    // ============================================================================
     // 重要：发起第一次 HID IN transfer
-    // ============================================================================
-    // 即使不是键盘设备，也要调用 tuh_hid_receive_report
-    // 这是 TinyUSB 的要求，用于启动设备的数据接收
-    // 否则 TinyUSB 不会接收该设备的数据
-    //
-    // 这个函数会发起一个 USB IN transaction
-    // 当设备返回数据时，TinyUSB 会调用 tuh_hid_report_received_cb
     tuh_hid_receive_report(dev_addr, instance);
 }
 
@@ -677,13 +488,16 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
     const uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
-        // 释放槽位
-        usb_host::freeSlot(dev_addr, instance);
-
-        // 减少挂载计数
-        if (usb_host::g_mounted > 0) {
-            usb_host::g_mounted--;
+    // 处理键盘和鼠标设备的卸载
+    if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD || 
+        itf_protocol == HID_ITF_PROTOCOL_MOUSE) {
+        
+        // 键盘设备需要释放槽位
+        if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
+            usb_host::freeSlot(dev_addr, instance);
+            if (usb_host::g_mounted > 0) {
+                usb_host::g_mounted--;
+            }
         }
 
         // 调用卸载回调

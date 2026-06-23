@@ -38,19 +38,16 @@ constexpr std::uint8_t kFrameHdr2 = 0xAB;
 // 键盘数据帧使用三字节头 57 AB 77（自定义协议，与 CH9350 区分）
 constexpr std::uint8_t kFrameHdr3Kb = 0x77;
 
-// TYPE 定义（用于非键盘帧：PING/PONG/设备事件等，仍使用 57 AB 两字节头）
-constexpr std::uint8_t kTypePing          = 0x02;
-constexpr std::uint8_t kTypePong          = 0x03;
-constexpr std::uint8_t kTypeDeviceMount   = 0x04;
-constexpr std::uint8_t kTypeDeviceUmount  = 0x05;
-constexpr std::uint8_t kTypeDeviceInfo    = 0x06;  // USB 设备详细信息
+// 设备事件帧使用三字节头 57 AB 71（自定义协议，完整设备描述符）
+constexpr std::uint8_t kFrameHdr3Dev = 0x71;
 
 // 帧长度常量
 // 键盘帧: 57 AB 77 <usage> <pressed> <modifiers> <checksum> = 7 字节
 constexpr std::size_t kKeyboardFrameLen   = 7;   // 3+3+1
-constexpr std::size_t kPingPongFrameLen   = 6;   // 2+1+1+1+1
-constexpr std::size_t kDeviceEventFrameLen= 6;   // 2+1+1+1+1
-constexpr std::size_t kDeviceInfoFrameLen = 14;  // 2+1+1+9+1 (dev_addr+VID+PID+bInterval+itf_num+itf_protocol+instance)
+// 设备帧: 57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
+//         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
+//         <itf_protocol><interval><instance><checksum> = 28 字节
+constexpr std::size_t kDeviceFrameLen     = 28;  // 3+24+1
 
 // ===== 公共 API =====
 
@@ -66,32 +63,16 @@ void uart_protocol_init();
 //   - 不通过 printf 打印 key 信息
 void uart_send_key_event(const usb_host::key_event& e);
 
-// 发送一个 PING 帧（上行 TX 原始帧：57 AB 10 03）
-void uart_send_ping();
-
-// 发送一个 PONG 帧（DATA 携带 payload）
-// 帧：57 AB 06 03 <payload> <XOR>
-void uart_send_pong(std::uint8_t payload);
-
-// 发送设备挂载通知帧
-// 帧：57 AB 06 04 <dev_addr> <XOR>
-void uart_send_device_mount(std::uint8_t dev_addr);
-
-// 发送设备卸载通知帧
-// 帧：57 AB 06 05 <dev_addr> <XOR>
-void uart_send_device_umount(std::uint8_t dev_addr);
-
-// 发送设备详细信息帧（包含 VID/PID/bInterval/itf_num/itf_protocol/instance）
-// 帧：57 AB 0B 06 <dev_addr> <vid_low> <vid_high> <pid_low> <pid_high> <bInterval> <itf_num> <itf_protocol> <instance> <XOR>
-void uart_send_device_info(std::uint8_t dev_addr, uint16_t vid, uint16_t pid, uint8_t bInterval, uint8_t itf_num, uint8_t itf_protocol, uint8_t instance);
+// 编码并发送一个设备事件二进制帧
+// 帧内容：57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
+//         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
+//         <itf_protocol><interval><instance><checksum>
+// 参数：info - 设备信息（包含完整描述符），mounted - true=设备插入，false=设备拔出
+void uart_send_device_info(const usb_host::device_info& info, bool mounted);
 
 // 通用帧发送接口（供 hid_encoder 等模块使用）
 // 直接发送原始字节流到 UART0
 void uart_send_frame(const std::uint8_t* data, std::size_t len);
-
-// 非阻塞 UART RX 轮询：处理下行 PING/PONG 命令
-// 每次调用最多读取并处理 1 字节
-void uart_poll_rx();
 
 // 是否已初始化（用于上层断言 / 调试检查）
 bool uart_protocol_is_initialized();

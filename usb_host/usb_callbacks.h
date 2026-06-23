@@ -143,16 +143,35 @@ struct key_event {
 };
 
 // ---- 设备信息结构 ----
-// 当 USB 键盘插入/拔出时，传递的设备详细信息
+// 当 USB HID 设备（键盘/鼠标）插入/拔出时，传递的完整设备描述符信息
 struct device_info {
+    // --- 设备状态 ---
     uint8_t dev_addr;         // USB 设备地址（1-127），由 USB 主机分配
+    uint8_t mounted;          // 0=设备拔出，1=设备插入
+    
+    // --- 设备描述符字段 ---
     uint16_t vid;             // Vendor ID：厂商标识（USB-IF 分配）
     uint16_t pid;             // Product ID：产品标识（厂商自定义）
-    uint8_t bInterval;        // 中断端点轮询间隔（毫秒）
-                              // USB HID 键盘通常报告 10ms（高频率）或更大值
-    uint8_t itf_num;          // 接口编号：设备内接口的序号
-    uint8_t itf_protocol;     // 接口协议：HID_ITF_PROTOCOL_KEYBOARD = 1
-    uint8_t instance;          // HID 实例号：支持同一个设备多个 HID 接口
+    uint16_t bcd_usb;         // USB 版本号（例如 0x0200 = USB 2.0）
+    uint8_t  b_device_class;  // 设备类代码（HID=0x03，或 0x00=接口定义）
+    uint8_t  b_device_subclass; // 设备子类代码
+    uint8_t  b_device_protocol; // 设备协议代码
+    uint8_t  b_max_packet_size0; // 端点0最大包大小（8/16/32/64）
+    uint16_t bcd_device;      // 设备版本号（厂商自定义）
+    
+    // --- 配置描述符字段 ---
+    uint8_t  b_num_interfaces;  // 配置支持的接口数量
+    uint8_t  b_configuration_value; // 配置值（用于 SetConfiguration）
+    uint8_t  bm_attributes;     // 配置属性（供电模式、远程唤醒等）
+    uint8_t  b_max_power;       // 最大功耗（单位：2mA，例如 50=100mA）
+    
+    // --- 接口描述符字段 ---
+    uint8_t  itf_num;           // 接口编号：设备内接口的序号
+    uint8_t  b_interface_class; // 接口类代码（HID=0x03）
+    uint8_t  b_interface_subclass; // 接口子类代码（HID boot=0x01）
+    uint8_t  itf_protocol;      // 接口协议：HID_ITF_PROTOCOL_KEYBOARD=1, MOUSE=2
+    uint8_t  b_interval;        // 中断端点轮询间隔（毫秒）
+    uint8_t  instance;          // HID 实例号：支持同一个设备多个 HID 接口
 };
 
 // ============================================================================

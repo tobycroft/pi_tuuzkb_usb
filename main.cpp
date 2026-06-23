@@ -40,34 +40,23 @@
 #endif
 
 // ============================================================================
-// key_event 路由：HID 层产生 key_event struct → 0x71 HID encoder
-//   output::hid_encoder_send(e) 将其编码为 0x71 帧并原子发送
-//   output::uart_protocol 负责 UART0 硬件初始化（9600/8N1）与 PING/PONG 轮询
+// key_event 路由：HID 层产生 key_event struct → 键盘帧编码器
+//   output::uart_send_key_event(e) 将其编码为 57AB77 帧并原子发送
+//   output::uart_protocol 负责 UART0 硬件初始化（9600/8N1）
 // —— 此处不调用任何 printf / 文本日志输出 key 信息
 // ============================================================================
 static void onKeyEvent(const usb_host::key_event& e) {
-    // 严格分层：HID 层产生 struct → hid encoder 编码为 0x71 帧 → UART0 发送
-    output::hid_encoder_send(e);
-
-    // —— 注意：禁止在此处 printf 任何 key info ——
-    // 若需要同时输出文本日志，请在 ENABLE_DEBUG_TEXT 下通过独立通道实现，
-    // 且不能影响二进制帧的原子性输出。
+    output::uart_send_key_event(e);
 }
 
-#if ENABLE_USB
-// 设备插拔事件：发送二进制帧通知（不依赖调试文本）
-// 当设备挂载时，还会发送设备详细信息（VID/PID/bInterval 等）
-static void onMount(const usb_host::device_info& info, bool mounted) {
-    if (mounted) {
-        output::uart_send_device_mount(info.dev_addr);
-        output::uart_send_device_info(info.dev_addr, info.vid, info.pid, 
-                                      info.bInterval, info.itf_num, 
-                                      info.itf_protocol, info.instance);
-    } else {
-        output::uart_send_device_umount(info.dev_addr);
-    }
+// ============================================================================
+// device_event 路由：USB Host 层产生 device_info struct → 设备帧编码器
+//   output::uart_send_device_info(info, mounted) 将其编码为 57AB81 帧并原子发送
+// —— 此处不调用任何 printf / 文本日志输出设备信息
+// ============================================================================
+static void onMountEvent(const usb_host::device_info& info, bool mounted) {
+    output::uart_send_device_info(info, mounted);
 }
-#endif  // ENABLE_USB
 
 // ============================================================================
 // main()
@@ -107,14 +96,12 @@ int main() {
 #endif
 
     // ===== 2) 注册 key_event 回调（二进制协议路由）=====
-    // 无论 ENABLE_USB 是否为 1，都保持注册逻辑一致 ——
-    // ENABLE_USB=0 时这些是空桩，调用无副作用
     usb_host::registerKeyEventCallback(onKeyEvent);
-#if ENABLE_USB
-    usb_host::registerMountCallback(onMount);
-#endif
 
-    // ===== 3) USB Host 初始化（仅 ENABLE_USB=1 时启用）=====
+    // ===== 3) 注册 device_event 回调（设备插拔通知）=====
+    usb_host::registerMountCallback(onMountEvent);
+
+    // ===== 4) USB Host 初始化（仅 ENABLE_USB=1 时启用）=====
 #if ENABLE_USB
     if (!tusb_init()) {
 #if ENABLE_DEBUG_TEXT
@@ -136,26 +123,13 @@ int main() {
 
     // ===== 4) 主循环 =====
     uint32_t last_tick_ms = to_ms_since_boot(get_absolute_time());
-    uint32_t last_ping_ms = to_ms_since_boot(get_absolute_time());
 
     while (true) {
 #if ENABLE_USB
-        // TinyUSB host 事件轮询 —— 此调用会触发 tuh_hid_* 回调，
-        // 回调会产生 key_event，进而路由到 output::uart_send_key_event(e)
         tuh_task();
 #endif
 
-        // ===== UART RX 轮询（PING/PONG 处理）=====
-        // 非阻塞：每次调用最多读取 1 字节，逐步推进状态机
-        output::uart_poll_rx();
-
         uint32_t now = to_ms_since_boot(get_absolute_time());
-
-        // ===== 5 秒心跳 PING =====
-        if (now - last_ping_ms >= 5000) {
-            last_ping_ms = now;
-            output::uart_send_ping();
-        }
 
         // —— 心跳：每秒一次，仅调试模式输出文本（确认主循环未卡死）——
 #if ENABLE_DEBUG_TEXT
@@ -165,7 +139,6 @@ int main() {
         }
         (void)last_tick_ms;
 #else
-        // 无文本输出，适度 yield
         sleep_ms(1);
 #endif
     }
