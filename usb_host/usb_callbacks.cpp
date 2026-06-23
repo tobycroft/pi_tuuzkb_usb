@@ -409,7 +409,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 
             // 获取设备描述符（完整）
             tusb_desc_device_t dev_desc;
-            if (tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc)) == sizeof(dev_desc)) {
+            std::memset(&dev_desc, 0, sizeof(dev_desc));
+            uint8_t dev_desc_len = tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc));
+            if (dev_desc_len == sizeof(dev_desc)) {
                 info.bcd_usb = dev_desc.bcdUSB;
                 info.b_device_class = dev_desc.bDeviceClass;
                 info.b_device_subclass = dev_desc.bDeviceSubClass;
@@ -484,6 +486,33 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                 } else {
                     info.serial_len = 0;
                     std::memset(info.serial, 0, 16);
+                }
+            } else {
+                // 获取设备描述符失败，尝试直接获取字符串（可能某些字段在设备描述符中为0但字符串索引有效）
+                constexpr uint16_t langid = 0x0409;
+                // 尝试字符串索引 1, 2, 3（USB 规范中常见的索引值）
+                for (uint8_t str_idx = 1; str_idx <= 3; str_idx++) {
+                    uint8_t str_buf[18];
+                    uint16_t str_len = tuh_descriptor_get_string_sync(
+                        dev_addr, str_idx, (uint16_t)langid,
+                        str_buf, (uint16_t)sizeof(str_buf));
+                    if (str_len >= 3) {
+                        uint16_t data_len = str_len - 2;
+                        if (data_len > 16) data_len = 16;
+                        if (str_idx == 1) {
+                            info.manufacturer_len = data_len;
+                            std::memcpy(info.manufacturer, str_buf + 2, data_len);
+                            std::memset(info.manufacturer + data_len, 0, 16 - data_len);
+                        } else if (str_idx == 2) {
+                            info.product_len = data_len;
+                            std::memcpy(info.product, str_buf + 2, data_len);
+                            std::memset(info.product + data_len, 0, 16 - data_len);
+                        } else if (str_idx == 3) {
+                            info.serial_len = data_len;
+                            std::memcpy(info.serial, str_buf + 2, data_len);
+                            std::memset(info.serial + data_len, 0, 16 - data_len);
+                        }
+                    }
                 }
             }
 
