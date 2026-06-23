@@ -258,6 +258,10 @@ void registerMountCallback(MountCallback cb);
 // 参数 strings：字符串描述符
 void registerStringsCallback(StringsCallback cb);
 
+// 在主循环中调用，处理待获取的字符串描述符
+// 必须在 tuh_task() 之后调用
+void poll_strings_task();
+
 // ---- 查询状态的辅助接口 ----
 // 返回当前挂载的键盘设备数量
 // 用于调试和状态显示

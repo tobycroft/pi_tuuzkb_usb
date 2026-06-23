@@ -194,6 +194,14 @@ MountCallback g_mount_cb = nullptr;
 // g_strings_cb：字符串描述符回调函数指针
 StringsCallback g_strings_cb = nullptr;
 
+// 字符串描述符待获取队列
+struct StringPending {
+    bool     pending;    // 是否有待获取的字符串
+    uint8_t  dev_addr;   // 设备地址
+    uint16_t tick;       // 计时器（每次 poll_strings_task 递增）
+};
+StringPending g_string_pending[kMaxDevices] = {};
+
 // ============================================================================
 // 函数定义 - 查找或分配槽位
 // ============================================================================
@@ -342,6 +350,77 @@ void registerStringsCallback(StringsCallback cb) {
     g_strings_cb = cb;
 }
 
+// poll_strings_task - 在主循环中调用，处理待获取的字符串描述符
+// 必须在 tuh_task() 之后调用，因为同步获取函数依赖 tuh_task() 驱动 USB 传输
+void poll_strings_task() {
+    for (size_t i = 0; i < kMaxDevices; i++) {
+        if (!g_string_pending[i].pending) continue;
+
+        g_string_pending[i].tick++;
+
+        // 等待约 100 次调用（约 1 秒，假设主循环约 10ms 一次）
+        if (g_string_pending[i].tick < 100) continue;
+
+        uint8_t dev_addr = g_string_pending[i].dev_addr;
+        g_string_pending[i].pending = false;
+
+        // 在主循环上下文中获取字符串描述符（tuh_task 已运行）
+        usb_host::device_strings strings = {};
+        constexpr uint16_t langid = 0x0409;  // English (US)
+
+        tusb_desc_device_t dev_desc;
+        std::memset(&dev_desc, 0, sizeof(dev_desc));
+        if (tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc)) == sizeof(dev_desc)) {
+            if (dev_desc.iManufacturer > 0) {
+                uint8_t str_buf[18];
+                uint16_t str_len = tuh_descriptor_get_string_sync(
+                    dev_addr, dev_desc.iManufacturer, (uint16_t)langid,
+                    str_buf, (uint16_t)sizeof(str_buf));
+                if (str_len >= 3) {
+                    uint16_t data_len = str_len - 2;
+                    if (data_len > 16) data_len = 16;
+                    strings.manufacturer_len = data_len;
+                    std::memcpy(strings.manufacturer, str_buf + 2, data_len);
+                    std::memset(strings.manufacturer + data_len, 0, 16 - data_len);
+                }
+            }
+
+            if (dev_desc.iProduct > 0) {
+                uint8_t str_buf[18];
+                uint16_t str_len = tuh_descriptor_get_string_sync(
+                    dev_addr, dev_desc.iProduct, (uint16_t)langid,
+                    str_buf, (uint16_t)sizeof(str_buf));
+                if (str_len >= 3) {
+                    uint16_t data_len = str_len - 2;
+                    if (data_len > 16) data_len = 16;
+                    strings.product_len = data_len;
+                    std::memcpy(strings.product, str_buf + 2, data_len);
+                    std::memset(strings.product + data_len, 0, 16 - data_len);
+                }
+            }
+
+            if (dev_desc.iSerialNumber > 0) {
+                uint8_t str_buf[18];
+                uint16_t str_len = tuh_descriptor_get_string_sync(
+                    dev_addr, dev_desc.iSerialNumber, (uint16_t)langid,
+                    str_buf, (uint16_t)sizeof(str_buf));
+                if (str_len >= 3) {
+                    uint16_t data_len = str_len - 2;
+                    if (data_len > 16) data_len = 16;
+                    strings.serial_len = data_len;
+                    std::memcpy(strings.serial, str_buf + 2, data_len);
+                    std::memset(strings.serial + data_len, 0, 16 - data_len);
+                }
+            }
+        }
+
+        // 调用字符串描述符回调（发送 0x72）
+        if (usb_host::g_strings_cb != nullptr) {
+            usb_host::g_strings_cb(dev_addr, strings);
+        }
+    }
+}
+
 // getMountedKeyboardCount - 获取挂载的键盘数量
 size_t getMountedKeyboardCount() {
     return g_mounted;
@@ -488,63 +567,16 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
             // 调用设备挂载回调（发送 0x71）
             usb_host::g_mount_cb(info, true);
 
-            // 等待 1 秒后再获取 USB 字符串描述符（确保设备完全准备好）
-            sleep_ms(1000);
-
-            // 尝试获取 USB 字符串描述符（发送 0x72）
-            usb_host::device_strings strings = {};
-            constexpr uint16_t langid = 0x0409;  // English (US)
-
-            // 获取制造商字符串
-            tusb_desc_device_t dev_desc_local;
-            std::memset(&dev_desc_local, 0, sizeof(dev_desc_local));
-            if (tuh_descriptor_get_device_sync(dev_addr, &dev_desc_local, sizeof(dev_desc_local)) == sizeof(dev_desc_local)) {
-                if (dev_desc_local.iManufacturer > 0) {
-                    uint8_t str_buf[18];
-                    uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, dev_desc_local.iManufacturer, (uint16_t)langid,
-                        str_buf, (uint16_t)sizeof(str_buf));
-                    if (str_len >= 3) {
-                        uint16_t data_len = str_len - 2;
-                        if (data_len > 16) data_len = 16;
-                        strings.manufacturer_len = data_len;
-                        std::memcpy(strings.manufacturer, str_buf + 2, data_len);
-                        std::memset(strings.manufacturer + data_len, 0, 16 - data_len);
-                    }
+            // 标记需要获取字符串描述符（延迟到主循环中执行）
+            // 注意：不能在回调中调用 tuh_descriptor_get_*_sync，
+            // 因为这些同步函数内部需要 tuh_task() 运行，而回调中 tuh_task() 被阻塞
+            for (size_t i = 0; i < usb_host::kMaxDevices; i++) {
+                if (!usb_host::g_string_pending[i].pending) {
+                    usb_host::g_string_pending[i].pending = true;
+                    usb_host::g_string_pending[i].dev_addr = dev_addr;
+                    usb_host::g_string_pending[i].tick = 0;  // 从 0 开始计时
+                    break;
                 }
-
-                if (dev_desc_local.iProduct > 0) {
-                    uint8_t str_buf[18];
-                    uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, dev_desc_local.iProduct, (uint16_t)langid,
-                        str_buf, (uint16_t)sizeof(str_buf));
-                    if (str_len >= 3) {
-                        uint16_t data_len = str_len - 2;
-                        if (data_len > 16) data_len = 16;
-                        strings.product_len = data_len;
-                        std::memcpy(strings.product, str_buf + 2, data_len);
-                        std::memset(strings.product + data_len, 0, 16 - data_len);
-                    }
-                }
-
-                if (dev_desc_local.iSerialNumber > 0) {
-                    uint8_t str_buf[18];
-                    uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, dev_desc_local.iSerialNumber, (uint16_t)langid,
-                        str_buf, (uint16_t)sizeof(str_buf));
-                    if (str_len >= 3) {
-                        uint16_t data_len = str_len - 2;
-                        if (data_len > 16) data_len = 16;
-                        strings.serial_len = data_len;
-                        std::memcpy(strings.serial, str_buf + 2, data_len);
-                        std::memset(strings.serial + data_len, 0, 16 - data_len);
-                    }
-                }
-            }
-
-            // 调用字符串描述符回调（发送 0x72）
-            if (usb_host::g_strings_cb != nullptr) {
-                usb_host::g_strings_cb(dev_addr, strings);
             }
         }
     }
@@ -684,6 +716,10 @@ void registerMountCallback(MountCallback) {
 }
 
 void registerStringsCallback(StringsCallback) {
+    // 空实现
+}
+
+void poll_strings_task() {
     // 空实现
 }
 

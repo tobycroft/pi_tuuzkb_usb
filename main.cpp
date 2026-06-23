@@ -138,6 +138,7 @@ int main() {
     while (true) {
 #if ENABLE_USB
         tuh_task();
+        usb_host::poll_strings_task();
 #endif
 
         uint32_t now = to_ms_since_boot(get_absolute_time());
