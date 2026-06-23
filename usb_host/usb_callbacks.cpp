@@ -640,7 +640,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                 // 如果没有找到 bInterval，设置默认值 10ms
                 // 某些设备可能不报告 bInterval，需要提供合理默认值
                 if (info.bInterval == 0) {
-                    info.bInterval = 10;
+                    info.bInterval = 11;
                 }
 
                 // 调用设备挂载回调，通知上层设备已插入
