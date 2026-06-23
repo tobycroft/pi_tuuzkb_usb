@@ -172,6 +172,16 @@ struct device_info {
     uint8_t  itf_protocol;      // 接口协议：HID_ITF_PROTOCOL_KEYBOARD=1, MOUSE=2
     uint8_t  b_interval;        // 中断端点轮询间隔（毫秒）
     uint8_t  instance;          // HID 实例号：支持同一个设备多个 HID 接口
+    
+    // --- 字符串描述符字段 ---
+    // 来自 USB 字符串描述符（UTF-16LE 编码，最大 127 字符）
+    // 每个字符串最多 16 字节（8 个 UTF-16LE 字符），超出部分截断
+    uint8_t  manufacturer[16];  // 制造商字符串（UTF-16LE）
+    uint8_t  product[16];       // 产品名称字符串（UTF-16LE）
+    uint8_t  serial[16];        // 序列号字符串（UTF-16LE）
+    uint8_t  manufacturer_len;  // 实际制造商字符串长度
+    uint8_t  product_len;       // 实际产品名称字符串长度
+    uint8_t  serial_len;        // 实际序列号字符串长度
 };
 
 // ============================================================================

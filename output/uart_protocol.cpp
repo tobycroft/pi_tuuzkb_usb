@@ -93,12 +93,31 @@ void uart_send_device_info(const usb_host::device_info& info, bool mounted) {
     g_device_frame_buf[25] = info.b_interval;
     g_device_frame_buf[26] = info.instance;
 
-    // XOR 校验（前 27 字节）
+    // 字符串描述符字段
+    // 制造商字符串
+    g_device_frame_buf[27] = info.manufacturer_len;
+    for (size_t i = 0; i < 16; i++) {
+        g_device_frame_buf[28 + i] = (i < info.manufacturer_len) ? info.manufacturer[i] : 0x00;
+    }
+    
+    // 产品名称字符串
+    g_device_frame_buf[44] = info.product_len;
+    for (size_t i = 0; i < 16; i++) {
+        g_device_frame_buf[45 + i] = (i < info.product_len) ? info.product[i] : 0x00;
+    }
+    
+    // 序列号字符串
+    g_device_frame_buf[61] = info.serial_len;
+    for (size_t i = 0; i < 16; i++) {
+        g_device_frame_buf[62 + i] = (i < info.serial_len) ? info.serial[i] : 0x00;
+    }
+
+    // XOR 校验（前 78 字节）
     std::uint8_t xor_sum = 0;
     for (std::size_t i = 0; i < kDeviceFrameLen - 1; i++) {
         xor_sum ^= g_device_frame_buf[i];
     }
-    g_device_frame_buf[27] = xor_sum;
+    g_device_frame_buf[78] = xor_sum;
 
     uart_write_blocking(uart0, g_device_frame_buf, kDeviceFrameLen);
 }

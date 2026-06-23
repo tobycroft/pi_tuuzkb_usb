@@ -46,8 +46,10 @@ constexpr std::uint8_t kFrameHdr3Dev = 0x71;
 constexpr std::size_t kKeyboardFrameLen   = 7;   // 3+3+1
 // 设备帧: 57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
 //         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
-//         <itf_protocol><interval><instance><checksum> = 28 字节
-constexpr std::size_t kDeviceFrameLen     = 28;  // 3+24+1
+//         <itf_protocol><interval><instance>
+//         <mfg_len><mfg[16]><prod_len><prod[16]><serial_len><serial[16]>
+//         <checksum> = 79 字节
+constexpr std::size_t kDeviceFrameLen     = 79;  // 3+24+51+1
 
 // ===== 公共 API =====
 

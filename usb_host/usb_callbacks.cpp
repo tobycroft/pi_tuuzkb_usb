@@ -416,6 +416,75 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                 info.b_device_protocol = dev_desc.bDeviceProtocol;
                 info.b_max_packet_size0 = dev_desc.bMaxPacketSize0;
                 info.bcd_device = dev_desc.bcdDevice;
+
+                // 获取字符串描述符（UTF-16LE 编码）
+                // 语言 ID 0x0409 = English (US)
+                // TinyUSB API: uint16_t tuh_descriptor_get_string_sync(uint8_t dev_addr, uint16_t langid, uint8_t desc_index, uint8_t* buffer, uint16_t bufsize)
+                constexpr uint16_t langid = 0x0409;
+
+                // 制造商字符串
+                if (dev_desc.iManufacturer > 0) {
+                    uint8_t str_buf[18];  // 2字节头 + 16字节数据
+                    uint16_t str_len = tuh_descriptor_get_string_sync(
+                        dev_addr, (uint16_t)langid, dev_desc.iManufacturer,
+                        str_buf, (uint16_t)sizeof(str_buf));
+                    // USB 字符串描述符格式：[length][type=3][UTF-16LE...]
+                    if (str_len >= 3) {
+                        uint16_t data_len = str_len - 2;  // 减去长度和类型字节
+                        if (data_len > 16) data_len = 16;
+                        info.manufacturer_len = data_len;
+                        std::memcpy(info.manufacturer, str_buf + 2, data_len);
+                        std::memset(info.manufacturer + data_len, 0, 16 - data_len);
+                    } else {
+                        info.manufacturer_len = 0;
+                        std::memset(info.manufacturer, 0, 16);
+                    }
+                } else {
+                    info.manufacturer_len = 0;
+                    std::memset(info.manufacturer, 0, 16);
+                }
+
+                // 产品名称字符串
+                if (dev_desc.iProduct > 0) {
+                    uint8_t str_buf[18];
+                    uint16_t str_len = tuh_descriptor_get_string_sync(
+                        dev_addr, (uint16_t)langid, dev_desc.iProduct,
+                        str_buf, (uint16_t)sizeof(str_buf));
+                    if (str_len >= 3) {
+                        uint16_t data_len = str_len - 2;
+                        if (data_len > 16) data_len = 16;
+                        info.product_len = data_len;
+                        std::memcpy(info.product, str_buf + 2, data_len);
+                        std::memset(info.product + data_len, 0, 16 - data_len);
+                    } else {
+                        info.product_len = 0;
+                        std::memset(info.product, 0, 16);
+                    }
+                } else {
+                    info.product_len = 0;
+                    std::memset(info.product, 0, 16);
+                }
+
+                // 序列号字符串
+                if (dev_desc.iSerialNumber > 0) {
+                    uint8_t str_buf[18];
+                    uint16_t str_len = tuh_descriptor_get_string_sync(
+                        dev_addr, (uint16_t)langid, dev_desc.iSerialNumber,
+                        str_buf, (uint16_t)sizeof(str_buf));
+                    if (str_len >= 3) {
+                        uint16_t data_len = str_len - 2;
+                        if (data_len > 16) data_len = 16;
+                        info.serial_len = data_len;
+                        std::memcpy(info.serial, str_buf + 2, data_len);
+                        std::memset(info.serial + data_len, 0, 16 - data_len);
+                    } else {
+                        info.serial_len = 0;
+                        std::memset(info.serial, 0, 16);
+                    }
+                } else {
+                    info.serial_len = 0;
+                    std::memset(info.serial, 0, 16);
+                }
             }
 
             // 获取配置描述符，解析接口和端点信息
