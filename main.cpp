@@ -51,11 +51,19 @@ static void onKeyEvent(const usb_host::key_event& e) {
 
 // ============================================================================
 // device_event 路由：USB Host 层产生 device_info struct → 设备帧编码器
-//   output::uart_send_device_info(info, mounted) 将其编码为 57AB81 帧并原子发送
+//   output::uart_send_device_info(info, mounted) 将其编码为 57AB71 帧并原子发送
 // —— 此处不调用任何 printf / 文本日志输出设备信息
 // ============================================================================
 static void onMountEvent(const usb_host::device_info& info, bool mounted) {
     output::uart_send_device_info(info, mounted);
+}
+
+// ============================================================================
+// strings_event 路由：USB Host 层获取字符串描述符 → 字符串帧编码器
+//   output::uart_send_device_strings(dev_addr, strings) 将其编码为 57AB72 帧并原子发送
+// ============================================================================
+static void onStringsEvent(uint8_t dev_addr, const usb_host::device_strings& strings) {
+    output::uart_send_device_strings(dev_addr, strings);
 }
 
 // ============================================================================
@@ -101,7 +109,10 @@ int main() {
     // ===== 3) 注册 device_event 回调（设备插拔通知）=====
     usb_host::registerMountCallback(onMountEvent);
 
-    // ===== 4) USB Host 初始化（仅 ENABLE_USB=1 时启用）=====
+    // ===== 4) 注册 strings_event 回调（字符串描述符通知）=====
+    usb_host::registerStringsCallback(onStringsEvent);
+
+    // ===== 5) USB Host 初始化（仅 ENABLE_USB=1 时启用）=====
 #if ENABLE_USB
     if (!tusb_init()) {
 #if ENABLE_DEBUG_TEXT

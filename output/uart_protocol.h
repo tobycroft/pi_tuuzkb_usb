@@ -38,18 +38,21 @@ constexpr std::uint8_t kFrameHdr2 = 0xAB;
 // 键盘数据帧使用三字节头 57 AB 77（自定义协议，与 CH9350 区分）
 constexpr std::uint8_t kFrameHdr3Kb = 0x77;
 
-// 设备事件帧使用三字节头 57 AB 71（自定义协议，完整设备描述符）
+// 设备事件帧使用三字节头 57 AB 71（自定义协议，设备枚举信息）
 constexpr std::uint8_t kFrameHdr3Dev = 0x71;
+
+// 字符串描述符帧使用三字节头 57 AB 72（USB 字符串描述符，枚举完成后获取）
+constexpr std::uint8_t kFrameHdr3Str = 0x72;
 
 // 帧长度常量
 // 键盘帧: 57 AB 77 <usage> <pressed> <modifiers> <checksum> = 7 字节
 constexpr std::size_t kKeyboardFrameLen   = 7;   // 3+3+1
 // 设备帧: 57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
 //         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
-//         <itf_protocol><interval><instance>
-//         <mfg_len><mfg[16]><prod_len><prod[16]><serial_len><serial[16]>
-//         <checksum> = 79 字节
-constexpr std::size_t kDeviceFrameLen     = 79;  // 3+24+51+1
+//         <itf_protocol><interval><instance><checksum> = 28 字节
+constexpr std::size_t kDeviceFrameLen     = 28;  // 3+24+1
+// 字符串帧: 57 AB 72 <dev_addr><mfg_len><mfg(16)><prod_len><prod(16)><serial_len><serial(16)><checksum> = 55 字节
+constexpr std::size_t kStringFrameLen     = 55;  // 3+51+1
 
 // ===== 公共 API =====
 
@@ -71,6 +74,11 @@ void uart_send_key_event(const usb_host::key_event& e);
 //         <itf_protocol><interval><instance><checksum>
 // 参数：info - 设备信息（包含完整描述符），mounted - true=设备插入，false=设备拔出
 void uart_send_device_info(const usb_host::device_info& info, bool mounted);
+
+// 编码并发送一个字符串描述符帧
+// 帧内容：57 AB 72 <dev_addr><mfg_len><mfg(16)><prod_len><prod(16)><serial_len><serial(16)><checksum>
+// 参数：dev_addr - 设备地址，strings - 字符串描述符结构
+void uart_send_device_strings(uint8_t dev_addr, const usb_host::device_strings& strings);
 
 // 通用帧发送接口（供 hid_encoder 等模块使用）
 // 直接发送原始字节流到 UART0

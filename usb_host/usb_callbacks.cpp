@@ -190,6 +190,9 @@ KeyEventCallback g_key_cb = nullptr;
 // g_mount_cb：设备挂载事件回调函数指针
 MountCallback g_mount_cb = nullptr;
 
+// g_strings_cb：字符串描述符回调函数指针
+StringsCallback g_strings_cb = nullptr;
+
 // ============================================================================
 // 函数定义 - 查找或分配槽位
 // ============================================================================
@@ -333,6 +336,11 @@ void registerMountCallback(MountCallback cb) {
     g_mount_cb = cb;
 }
 
+// registerStringsCallback - 注册字符串描述符回调
+void registerStringsCallback(StringsCallback cb) {
+    g_strings_cb = cb;
+}
+
 // getMountedKeyboardCount - 获取挂载的键盘数量
 size_t getMountedKeyboardCount() {
     return g_mounted;
@@ -418,102 +426,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                 info.b_device_protocol = dev_desc.bDeviceProtocol;
                 info.b_max_packet_size0 = dev_desc.bMaxPacketSize0;
                 info.bcd_device = dev_desc.bcdDevice;
-
-                // 获取字符串描述符（UTF-16LE 编码）
-                // 语言 ID 0x0409 = English (US)
-                // TinyUSB API: uint8_t tuh_descriptor_get_string_sync(uint8_t daddr, uint8_t index, uint16_t language_id, void* buffer, uint16_t len)
-                constexpr uint16_t langid = 0x0409;
-
-                // 制造商字符串
-                if (dev_desc.iManufacturer > 0) {
-                    uint8_t str_buf[18];  // 2字节头 + 16字节数据
-                    uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, dev_desc.iManufacturer, (uint16_t)langid,
-                        str_buf, (uint16_t)sizeof(str_buf));
-                    // USB 字符串描述符格式：[length][type=3][UTF-16LE...]
-                    if (str_len >= 3) {
-                        uint16_t data_len = str_len - 2;  // 减去长度和类型字节
-                        if (data_len > 16) data_len = 16;
-                        info.manufacturer_len = data_len;
-                        std::memcpy(info.manufacturer, str_buf + 2, data_len);
-                        std::memset(info.manufacturer + data_len, 0, 16 - data_len);
-                    } else {
-                        info.manufacturer_len = 0;
-                        std::memset(info.manufacturer, 0, 16);
-                    }
-                } else {
-                    info.manufacturer_len = 0;
-                    std::memset(info.manufacturer, 0, 16);
-                }
-
-                // 产品名称字符串
-                if (dev_desc.iProduct > 0) {
-                    uint8_t str_buf[18];
-                    uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, dev_desc.iProduct, (uint16_t)langid,
-                        str_buf, (uint16_t)sizeof(str_buf));
-                    if (str_len >= 3) {
-                        uint16_t data_len = str_len - 2;
-                        if (data_len > 16) data_len = 16;
-                        info.product_len = data_len;
-                        std::memcpy(info.product, str_buf + 2, data_len);
-                        std::memset(info.product + data_len, 0, 16 - data_len);
-                    } else {
-                        info.product_len = 0;
-                        std::memset(info.product, 0, 16);
-                    }
-                } else {
-                    info.product_len = 0;
-                    std::memset(info.product, 0, 16);
-                }
-
-                // 序列号字符串
-                if (dev_desc.iSerialNumber > 0) {
-                    uint8_t str_buf[18];
-                    uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, dev_desc.iSerialNumber, (uint16_t)langid,
-                        str_buf, (uint16_t)sizeof(str_buf));
-                    if (str_len >= 3) {
-                        uint16_t data_len = str_len - 2;
-                        if (data_len > 16) data_len = 16;
-                        info.serial_len = data_len;
-                        std::memcpy(info.serial, str_buf + 2, data_len);
-                        std::memset(info.serial + data_len, 0, 16 - data_len);
-                    } else {
-                        info.serial_len = 0;
-                        std::memset(info.serial, 0, 16);
-                    }
-                } else {
-                    info.serial_len = 0;
-                    std::memset(info.serial, 0, 16);
-                }
-            } else {
-                // 获取设备描述符失败，尝试直接获取字符串（可能某些字段在设备描述符中为0但字符串索引有效）
-                constexpr uint16_t langid = 0x0409;
-                // 尝试字符串索引 1, 2, 3（USB 规范中常见的索引值）
-                for (uint8_t str_idx = 1; str_idx <= 3; str_idx++) {
-                    uint8_t str_buf[18];
-                    uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, str_idx, (uint16_t)langid,
-                        str_buf, (uint16_t)sizeof(str_buf));
-                    if (str_len >= 3) {
-                        uint16_t data_len = str_len - 2;
-                        if (data_len > 16) data_len = 16;
-                        if (str_idx == 1) {
-                            info.manufacturer_len = data_len;
-                            std::memcpy(info.manufacturer, str_buf + 2, data_len);
-                            std::memset(info.manufacturer + data_len, 0, 16 - data_len);
-                        } else if (str_idx == 2) {
-                            info.product_len = data_len;
-                            std::memcpy(info.product, str_buf + 2, data_len);
-                            std::memset(info.product + data_len, 0, 16 - data_len);
-                        } else if (str_idx == 3) {
-                            info.serial_len = data_len;
-                            std::memcpy(info.serial, str_buf + 2, data_len);
-                            std::memset(info.serial + data_len, 0, 16 - data_len);
-                        }
-                    }
-                }
             }
 
             // 获取配置描述符，解析接口和端点信息
@@ -572,8 +484,64 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                 info.b_interval = 10;  // HID 默认轮询间隔 10ms
             }
 
-            // 调用设备挂载回调
+            // 调用设备挂载回调（发送 0x71）
             usb_host::g_mount_cb(info, true);
+
+            // 尝试获取 USB 字符串描述符（发送 0x72）
+            usb_host::device_strings strings = {};
+            constexpr uint16_t langid = 0x0409;  // English (US)
+
+            // 获取制造商字符串
+            tusb_desc_device_t dev_desc_local;
+            std::memset(&dev_desc_local, 0, sizeof(dev_desc_local));
+            if (tuh_descriptor_get_device_sync(dev_addr, &dev_desc_local, sizeof(dev_desc_local)) == sizeof(dev_desc_local)) {
+                if (dev_desc_local.iManufacturer > 0) {
+                    uint8_t str_buf[18];
+                    uint16_t str_len = tuh_descriptor_get_string_sync(
+                        dev_addr, dev_desc_local.iManufacturer, (uint16_t)langid,
+                        str_buf, (uint16_t)sizeof(str_buf));
+                    if (str_len >= 3) {
+                        uint16_t data_len = str_len - 2;
+                        if (data_len > 16) data_len = 16;
+                        strings.manufacturer_len = data_len;
+                        std::memcpy(strings.manufacturer, str_buf + 2, data_len);
+                        std::memset(strings.manufacturer + data_len, 0, 16 - data_len);
+                    }
+                }
+
+                if (dev_desc_local.iProduct > 0) {
+                    uint8_t str_buf[18];
+                    uint16_t str_len = tuh_descriptor_get_string_sync(
+                        dev_addr, dev_desc_local.iProduct, (uint16_t)langid,
+                        str_buf, (uint16_t)sizeof(str_buf));
+                    if (str_len >= 3) {
+                        uint16_t data_len = str_len - 2;
+                        if (data_len > 16) data_len = 16;
+                        strings.product_len = data_len;
+                        std::memcpy(strings.product, str_buf + 2, data_len);
+                        std::memset(strings.product + data_len, 0, 16 - data_len);
+                    }
+                }
+
+                if (dev_desc_local.iSerialNumber > 0) {
+                    uint8_t str_buf[18];
+                    uint16_t str_len = tuh_descriptor_get_string_sync(
+                        dev_addr, dev_desc_local.iSerialNumber, (uint16_t)langid,
+                        str_buf, (uint16_t)sizeof(str_buf));
+                    if (str_len >= 3) {
+                        uint16_t data_len = str_len - 2;
+                        if (data_len > 16) data_len = 16;
+                        strings.serial_len = data_len;
+                        std::memcpy(strings.serial, str_buf + 2, data_len);
+                        std::memset(strings.serial + data_len, 0, 16 - data_len);
+                    }
+                }
+            }
+
+            // 调用字符串描述符回调（发送 0x72）
+            if (usb_host::g_strings_cb != nullptr) {
+                usb_host::g_strings_cb(dev_addr, strings);
+            }
         }
     }
 
@@ -708,6 +676,10 @@ void registerKeyEventCallback(KeyEventCallback) {
 }
 
 void registerMountCallback(MountCallback) {
+    // 空实现
+}
+
+void registerStringsCallback(StringsCallback) {
     // 空实现
 }
 

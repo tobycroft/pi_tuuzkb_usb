@@ -172,10 +172,11 @@ struct device_info {
     uint8_t  itf_protocol;      // 接口协议：HID_ITF_PROTOCOL_KEYBOARD=1, MOUSE=2
     uint8_t  b_interval;        // 中断端点轮询间隔（毫秒）
     uint8_t  instance;          // HID 实例号：支持同一个设备多个 HID 接口
-    
-    // --- 字符串描述符字段 ---
-    // 来自 USB 字符串描述符（UTF-16LE 编码，最大 127 字符）
-    // 每个字符串最多 16 字节（8 个 UTF-16LE 字符），超出部分截断
+};
+
+// ---- 设备字符串描述符结构 ----
+// USB 字符串描述符（UTF-16LE 编码，枚举完成后单独获取）
+struct device_strings {
     uint8_t  manufacturer[16];  // 制造商字符串（UTF-16LE）
     uint8_t  product[16];       // 产品名称字符串（UTF-16LE）
     uint8_t  serial[16];        // 序列号字符串（UTF-16LE）
@@ -210,13 +211,19 @@ struct device_info {
 // 对比 Go 的函数类型：
 // Go: type KeyEventCallback func(key_event)  // 值传递
 // C++: using KeyEventCallback = void(*)(const key_event&);  // 引用传递
-//
+using KeyEventCallback = void(*)(const key_event&);
+
 // MountCallback：设备插拔事件的回调函数类型
 // 回调函数签名：void callback(const device_info& info, bool mounted)
 // - 参数1：device_info 设备信息
 // - 参数2：bool mounted，true=插入，false=拔出
-using KeyEventCallback = void(*)(const key_event&);
 using MountCallback = void(*)(const device_info& info, bool mounted);
+
+// StringsCallback：字符串描述符获取完成回调
+// 回调函数签名：void callback(uint8_t dev_addr, const device_strings& strings)
+// - 参数1：dev_addr 设备地址
+// - 参数2：device_strings 字符串描述符
+using StringsCallback = void(*)(uint8_t dev_addr, const device_strings& strings);
 
 // ============================================================================
 // 函数声明（不包含实现）
@@ -244,6 +251,12 @@ void registerKeyEventCallback(KeyEventCallback cb);
 // 参数 info：设备信息
 // 参数 mounted：true=设备插入，false=设备拔出
 void registerMountCallback(MountCallback cb);
+
+// 注册字符串描述符回调：当字符串描述符获取完成时调用这个函数
+// 参数 cb：回调函数指针
+// 参数 dev_addr：设备地址
+// 参数 strings：字符串描述符
+void registerStringsCallback(StringsCallback cb);
 
 // ---- 查询状态的辅助接口 ----
 // 返回当前挂载的键盘设备数量
