@@ -194,13 +194,15 @@ MountCallback g_mount_cb = nullptr;
 // g_strings_cb：字符串描述符回调函数指针
 StringsCallback g_strings_cb = nullptr;
 
-// 字符串描述符待获取队列
-struct StringPending {
-    bool     pending;    // 是否有待获取的字符串
-    uint8_t  dev_addr;   // 设备地址
-    uint16_t tick;       // 计时器（每次 poll_strings_task 递增）
+// 设备待处理队列（mount 回调只做标记，所有描述符读取在主循环中执行）
+struct PendingDevice {
+    bool     pending;       // 是否有待处理
+    uint8_t  dev_addr;      // 设备地址
+    uint8_t  instance;      // HID 实例号
+    uint8_t  itf_protocol;  // 接口协议
+    uint16_t tick;          // 计时器（每次 poll_strings_task 递增）
 };
-StringPending g_string_pending[kMaxDevices] = {};
+PendingDevice g_pending[kMaxDevices] = {};
 
 // ============================================================================
 // 函数定义 - 查找或分配槽位
@@ -350,28 +352,109 @@ void registerStringsCallback(StringsCallback cb) {
     g_strings_cb = cb;
 }
 
-// poll_strings_task - 在主循环中调用，处理待获取的字符串描述符
+// poll_strings_task - 在主循环中调用，处理待获取的设备描述符和字符串描述符
 // 必须在 tuh_task() 之后调用，因为同步获取函数依赖 tuh_task() 驱动 USB 传输
+// 注意：mount 回调中无法使用同步 API（_ctrl_xfer.stage 不是 IDLE）
 void poll_strings_task() {
     for (size_t i = 0; i < kMaxDevices; i++) {
-        if (!g_string_pending[i].pending) continue;
+        if (!g_pending[i].pending) continue;
 
-        g_string_pending[i].tick++;
+        g_pending[i].tick++;
 
-        // 等待约 100 次调用（约 1 秒，假设主循环约 10ms 一次）
-        if (g_string_pending[i].tick < 100) continue;
+        // 等待约 50 次调用（约 500ms），确保设备枚举完全完成
+        if (g_pending[i].tick < 50) continue;
 
-        uint8_t dev_addr = g_string_pending[i].dev_addr;
-        g_string_pending[i].pending = false;
+        uint8_t dev_addr = g_pending[i].dev_addr;
+        uint8_t instance = g_pending[i].instance;
+        uint8_t itf_protocol = g_pending[i].itf_protocol;
+        g_pending[i].pending = false;
 
-        // 在主循环上下文中获取字符串描述符（tuh_task 已运行）
-        // 注意：tuh_descriptor_get_*_sync 返回 xfer_result_t（0=成功），不是长度！
-        usb_host::device_strings strings = {};
-        constexpr uint16_t langid = 0x0409;  // English (US)
+        // 设备可能被拔出了，检查是否还连接
+        if (!tuh_mounted(dev_addr)) continue;
 
+        // 构造设备信息结构体
+        usb_host::device_info info = {};
+        info.dev_addr = dev_addr;
+        info.instance = instance;
+        info.itf_protocol = itf_protocol;
+
+        // 获取 VID/PID（TinyUSB 缓存）
+        tuh_vid_pid_get(dev_addr, &info.vid, &info.pid);
+
+        // 获取设备描述符（同步 API，在主循环中可正常工作）
         tusb_desc_device_t dev_desc;
         std::memset(&dev_desc, 0, sizeof(dev_desc));
         uint8_t dev_desc_result = tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc));
+        if (dev_desc_result == XFER_RESULT_SUCCESS) {
+            info.bcd_usb = dev_desc.bcdUSB;
+            info.b_device_class = dev_desc.bDeviceClass;
+            info.b_device_subclass = dev_desc.bDeviceSubClass;
+            info.b_device_protocol = dev_desc.bDeviceProtocol;
+            info.b_max_packet_size0 = dev_desc.bMaxPacketSize0;
+            info.bcd_device = dev_desc.bcdDevice;
+        }
+
+        // 获取配置描述符，解析接口和端点信息
+        uint8_t buffer[512];
+        std::memset(buffer, 0, sizeof(buffer));
+        uint8_t cfg_result = tuh_descriptor_get_configuration_sync(
+            dev_addr, 0, buffer, sizeof(buffer));
+
+        if (cfg_result == XFER_RESULT_SUCCESS) {
+            uint16_t cfg_total_len = buffer[2] | (buffer[3] << 8);
+            if (cfg_total_len > 9) {
+                const uint8_t* p = buffer + 9;
+                info.b_num_interfaces = buffer[4];
+                info.b_configuration_value = buffer[5];
+                info.bm_attributes = buffer[7];
+                info.b_max_power = buffer[8];
+
+                while (p < buffer + cfg_total_len) {
+                    uint8_t desc_type = p[1];
+                    uint8_t desc_len = p[0];
+
+                    if (desc_type == TUSB_DESC_INTERFACE) {
+                        uint8_t itf_num = p[2];
+                        uint8_t itf_prot = p[5];
+
+                        if (itf_prot == itf_protocol) {
+                            info.itf_num = itf_num;
+                            info.b_interface_class = p[4];
+                            info.b_interface_subclass = p[5];
+
+                            p += desc_len;
+                            while (p < buffer + cfg_total_len) {
+                                if (p[1] == TUSB_DESC_ENDPOINT) {
+                                    const tusb_desc_endpoint_t* ep =
+                                        (const tusb_desc_endpoint_t*)p;
+                                    if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
+                                        info.b_interval = ep->bInterval;
+                                        break;
+                                    }
+                                }
+                                p += p[0];
+                            }
+                            break;
+                        }
+                    }
+                    p += desc_len;
+                }
+            }
+        }
+
+        if (info.b_interval == 0) {
+            info.b_interval = 10;
+        }
+
+        // 发送 0x71 设备帧
+        if (usb_host::g_mount_cb != nullptr) {
+            usb_host::g_mount_cb(info, true);
+        }
+
+        // 获取字符串描述符并发送 0x72
+        usb_host::device_strings strings = {};
+        constexpr uint16_t langid = 0x0409;
+
         if (dev_desc_result == XFER_RESULT_SUCCESS) {
             if (dev_desc.iManufacturer > 0) {
                 uint8_t str_buf[18];
@@ -380,7 +463,7 @@ void poll_strings_task() {
                     dev_addr, dev_desc.iManufacturer, (uint16_t)langid,
                     str_buf, (uint16_t)sizeof(str_buf));
                 if (str_result == XFER_RESULT_SUCCESS && str_buf[0] >= 3) {
-                    uint16_t data_len = str_buf[0] - 2;  // bLength - 2 (跳过 bLength 和 bDescriptorType)
+                    uint16_t data_len = str_buf[0] - 2;
                     if (data_len > 16) data_len = 16;
                     strings.manufacturer_len = data_len;
                     std::memcpy(strings.manufacturer, str_buf + 2, data_len);
@@ -419,7 +502,6 @@ void poll_strings_task() {
             }
         }
 
-        // 调用字符串描述符回调（发送 0x72）
         if (usb_host::g_strings_cb != nullptr) {
             usb_host::g_strings_cb(dev_addr, strings);
         }
@@ -490,105 +572,17 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
             }
         }
 
-        // 构造完整的设备信息结构体
-        if (usb_host::g_mount_cb != nullptr) {
-            usb_host::device_info info = {};
-            info.dev_addr = dev_addr;
-            info.instance = instance;
-            info.itf_protocol = itf_protocol;
-
-            // 获取 VID/PID
-            tuh_vid_pid_get(dev_addr, &info.vid, &info.pid);
-
-            // 获取设备描述符（完整）
-            // 注意：tuh_descriptor_get_device_sync 返回 xfer_result_t（0=成功），不是长度！
-            tusb_desc_device_t dev_desc;
-            std::memset(&dev_desc, 0, sizeof(dev_desc));
-            uint8_t dev_desc_result = tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc));
-            if (dev_desc_result == XFER_RESULT_SUCCESS) {
-                info.bcd_usb = dev_desc.bcdUSB;
-                info.b_device_class = dev_desc.bDeviceClass;
-                info.b_device_subclass = dev_desc.bDeviceSubClass;
-                info.b_device_protocol = dev_desc.bDeviceProtocol;
-                info.b_max_packet_size0 = dev_desc.bMaxPacketSize0;
-                info.bcd_device = dev_desc.bcdDevice;
-            }
-
-            // 获取配置描述符，解析接口和端点信息
-            // 注意：tuh_descriptor_get_configuration_sync 返回 xfer_result_t（0=成功），不是长度！
-            uint8_t buffer[512];
-            std::memset(buffer, 0, sizeof(buffer));
-            uint8_t cfg_result = tuh_descriptor_get_configuration_sync(
-                dev_addr, 0, buffer, sizeof(buffer));
-
-            if (cfg_result == XFER_RESULT_SUCCESS) {
-                // 配置描述符前 9 字节是头部，wTotalLength 在 byte[2..3]
-                uint16_t cfg_total_len = buffer[2] | (buffer[3] << 8);
-                if (cfg_total_len > 9) {
-                    const uint8_t* p = buffer + 9;  // 跳过配置描述符本身（9字节）
-
-                    // 先从配置描述符头部提取字段
-                    info.b_num_interfaces = buffer[4];
-                    info.b_configuration_value = buffer[5];
-                    info.bm_attributes = buffer[7];
-                    info.b_max_power = buffer[8];
-
-                    // 遍历描述符，查找当前接口的详细信息
-                    while (p < buffer + cfg_total_len) {
-                        uint8_t desc_type = p[1];
-                        uint8_t desc_len = p[0];
-
-                        if (desc_type == TUSB_DESC_INTERFACE) {
-                            uint8_t itf_num = p[2];
-                            uint8_t itf_prot = p[5];
-
-                            // 找到当前 HID 接口
-                            if (itf_prot == itf_protocol) {
-                                info.itf_num = itf_num;
-                                info.b_interface_class = p[4];
-                                info.b_interface_subclass = p[5];
-
-                                // 跳过接口描述符，查找端点描述符
-                                p += desc_len;
-                                while (p < buffer + cfg_total_len) {
-                                    if (p[1] == TUSB_DESC_ENDPOINT) {
-                                        const tusb_desc_endpoint_t* ep =
-                                            (const tusb_desc_endpoint_t*)p;
-
-                                        // 检查是否是中断端点（IN 方向）
-                                        if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
-                                            info.b_interval = ep->bInterval;
-                                            break;
-                                        }
-                                    }
-                                    p += p[0];
-                                }
-                                break;
-                            }
-                        }
-                        p += desc_len;
-                    }
-                }
-            }
-
-            // 如果没有找到 bInterval，设置默认值
-            if (info.b_interval == 0) {
-                info.b_interval = 10;  // HID 默认轮询间隔 10ms
-            }
-
-            // 调用设备挂载回调（发送 0x71）
-            usb_host::g_mount_cb(info, true);
-
-            // 标记需要获取字符串描述符（延迟到主循环中执行）
-            // 注意：不能在回调中调用 tuh_descriptor_get_*_sync，
-            // 因为这些同步函数内部需要 tuh_task() 运行，而回调中 tuh_task() 被阻塞
-            for (size_t i = 0; i < usb_host::kMaxDevices; i++) {
-                if (!usb_host::g_string_pending[i].pending) {
-                    usb_host::g_string_pending[i].pending = true;
-                    usb_host::g_string_pending[i].dev_addr = dev_addr;
-                    usb_host::g_string_pending[i].tick = 0;  // 从 0 开始计时
-                    break;
-                }
+        // 标记设备待处理，所有描述符读取和 0x71/0x72 发送延迟到主循环中执行
+        // 原因：tuh_hid_mount_cb 是从 tuh_task() 内部调用的，此时 _ctrl_xfer.stage
+        // 不是 IDLE，无法启动新的同步控制传输
+        for (size_t i = 0; i < usb_host::kMaxDevices; i++) {
+            if (!usb_host::g_pending[i].pending) {
+                usb_host::g_pending[i].pending = true;
+                usb_host::g_pending[i].dev_addr = dev_addr;
+                usb_host::g_pending[i].instance = instance;
+                usb_host::g_pending[i].itf_protocol = itf_protocol;
+                usb_host::g_pending[i].tick = 0;
+                break;
             }
         }
     }
@@ -611,6 +605,14 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
             usb_host::freeSlot(dev_addr, instance);
             if (usb_host::g_mounted > 0) {
                 usb_host::g_mounted--;
+            }
+        }
+
+        // 清除该设备的待处理标记（防止 poll_strings_task 对已拔出设备操作）
+        for (size_t i = 0; i < usb_host::kMaxDevices; i++) {
+            if (usb_host::g_pending[i].pending && usb_host::g_pending[i].dev_addr == dev_addr) {
+                usb_host::g_pending[i].pending = false;
+                break;
             }
         }
 
