@@ -419,14 +419,14 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 
                 // 获取字符串描述符（UTF-16LE 编码）
                 // 语言 ID 0x0409 = English (US)
-                // TinyUSB API: uint16_t tuh_descriptor_get_string_sync(uint8_t dev_addr, uint16_t langid, uint8_t desc_index, uint8_t* buffer, uint16_t bufsize)
+                // TinyUSB API: uint8_t tuh_descriptor_get_string_sync(uint8_t daddr, uint8_t index, uint16_t language_id, void* buffer, uint16_t len)
                 constexpr uint16_t langid = 0x0409;
 
                 // 制造商字符串
                 if (dev_desc.iManufacturer > 0) {
                     uint8_t str_buf[18];  // 2字节头 + 16字节数据
                     uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, (uint16_t)langid, dev_desc.iManufacturer,
+                        dev_addr, dev_desc.iManufacturer, (uint16_t)langid,
                         str_buf, (uint16_t)sizeof(str_buf));
                     // USB 字符串描述符格式：[length][type=3][UTF-16LE...]
                     if (str_len >= 3) {
@@ -448,7 +448,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                 if (dev_desc.iProduct > 0) {
                     uint8_t str_buf[18];
                     uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, (uint16_t)langid, dev_desc.iProduct,
+                        dev_addr, dev_desc.iProduct, (uint16_t)langid,
                         str_buf, (uint16_t)sizeof(str_buf));
                     if (str_len >= 3) {
                         uint16_t data_len = str_len - 2;
@@ -469,7 +469,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                 if (dev_desc.iSerialNumber > 0) {
                     uint8_t str_buf[18];
                     uint16_t str_len = tuh_descriptor_get_string_sync(
-                        dev_addr, (uint16_t)langid, dev_desc.iSerialNumber,
+                        dev_addr, dev_desc.iSerialNumber, (uint16_t)langid,
                         str_buf, (uint16_t)sizeof(str_buf));
                     if (str_len >= 3) {
                         uint16_t data_len = str_len - 2;
