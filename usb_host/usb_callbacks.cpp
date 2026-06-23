@@ -365,19 +365,22 @@ void poll_strings_task() {
         g_string_pending[i].pending = false;
 
         // 在主循环上下文中获取字符串描述符（tuh_task 已运行）
+        // 注意：tuh_descriptor_get_*_sync 返回 xfer_result_t（0=成功），不是长度！
         usb_host::device_strings strings = {};
         constexpr uint16_t langid = 0x0409;  // English (US)
 
         tusb_desc_device_t dev_desc;
         std::memset(&dev_desc, 0, sizeof(dev_desc));
-        if (tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc)) == sizeof(dev_desc)) {
+        uint8_t dev_desc_result = tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc));
+        if (dev_desc_result == XFER_RESULT_SUCCESS) {
             if (dev_desc.iManufacturer > 0) {
                 uint8_t str_buf[18];
-                uint16_t str_len = tuh_descriptor_get_string_sync(
+                std::memset(str_buf, 0, sizeof(str_buf));
+                uint8_t str_result = tuh_descriptor_get_string_sync(
                     dev_addr, dev_desc.iManufacturer, (uint16_t)langid,
                     str_buf, (uint16_t)sizeof(str_buf));
-                if (str_len >= 3) {
-                    uint16_t data_len = str_len - 2;
+                if (str_result == XFER_RESULT_SUCCESS && str_buf[0] >= 3) {
+                    uint16_t data_len = str_buf[0] - 2;  // bLength - 2 (跳过 bLength 和 bDescriptorType)
                     if (data_len > 16) data_len = 16;
                     strings.manufacturer_len = data_len;
                     std::memcpy(strings.manufacturer, str_buf + 2, data_len);
@@ -387,11 +390,12 @@ void poll_strings_task() {
 
             if (dev_desc.iProduct > 0) {
                 uint8_t str_buf[18];
-                uint16_t str_len = tuh_descriptor_get_string_sync(
+                std::memset(str_buf, 0, sizeof(str_buf));
+                uint8_t str_result = tuh_descriptor_get_string_sync(
                     dev_addr, dev_desc.iProduct, (uint16_t)langid,
                     str_buf, (uint16_t)sizeof(str_buf));
-                if (str_len >= 3) {
-                    uint16_t data_len = str_len - 2;
+                if (str_result == XFER_RESULT_SUCCESS && str_buf[0] >= 3) {
+                    uint16_t data_len = str_buf[0] - 2;
                     if (data_len > 16) data_len = 16;
                     strings.product_len = data_len;
                     std::memcpy(strings.product, str_buf + 2, data_len);
@@ -401,11 +405,12 @@ void poll_strings_task() {
 
             if (dev_desc.iSerialNumber > 0) {
                 uint8_t str_buf[18];
-                uint16_t str_len = tuh_descriptor_get_string_sync(
+                std::memset(str_buf, 0, sizeof(str_buf));
+                uint8_t str_result = tuh_descriptor_get_string_sync(
                     dev_addr, dev_desc.iSerialNumber, (uint16_t)langid,
                     str_buf, (uint16_t)sizeof(str_buf));
-                if (str_len >= 3) {
-                    uint16_t data_len = str_len - 2;
+                if (str_result == XFER_RESULT_SUCCESS && str_buf[0] >= 3) {
+                    uint16_t data_len = str_buf[0] - 2;
                     if (data_len > 16) data_len = 16;
                     strings.serial_len = data_len;
                     std::memcpy(strings.serial, str_buf + 2, data_len);
@@ -496,10 +501,11 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
             tuh_vid_pid_get(dev_addr, &info.vid, &info.pid);
 
             // 获取设备描述符（完整）
+            // 注意：tuh_descriptor_get_device_sync 返回 xfer_result_t（0=成功），不是长度！
             tusb_desc_device_t dev_desc;
             std::memset(&dev_desc, 0, sizeof(dev_desc));
-            uint8_t dev_desc_len = tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc));
-            if (dev_desc_len == sizeof(dev_desc)) {
+            uint8_t dev_desc_result = tuh_descriptor_get_device_sync(dev_addr, &dev_desc, sizeof(dev_desc));
+            if (dev_desc_result == XFER_RESULT_SUCCESS) {
                 info.bcd_usb = dev_desc.bcdUSB;
                 info.b_device_class = dev_desc.bDeviceClass;
                 info.b_device_subclass = dev_desc.bDeviceSubClass;
@@ -509,53 +515,59 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
             }
 
             // 获取配置描述符，解析接口和端点信息
+            // 注意：tuh_descriptor_get_configuration_sync 返回 xfer_result_t（0=成功），不是长度！
             uint8_t buffer[512];
-            uint16_t len = tuh_descriptor_get_configuration_sync(
+            std::memset(buffer, 0, sizeof(buffer));
+            uint8_t cfg_result = tuh_descriptor_get_configuration_sync(
                 dev_addr, 0, buffer, sizeof(buffer));
 
-            if (len > 9) {
-                const uint8_t* p = buffer + 9;  // 跳过配置描述符本身（9字节）
+            if (cfg_result == XFER_RESULT_SUCCESS) {
+                // 配置描述符前 9 字节是头部，wTotalLength 在 byte[2..3]
+                uint16_t cfg_total_len = buffer[2] | (buffer[3] << 8);
+                if (cfg_total_len > 9) {
+                    const uint8_t* p = buffer + 9;  // 跳过配置描述符本身（9字节）
 
-                // 先从配置描述符头部提取字段
-                info.b_num_interfaces = buffer[4];
-                info.b_configuration_value = buffer[5];
-                info.bm_attributes = buffer[7];
-                info.b_max_power = buffer[8];
+                    // 先从配置描述符头部提取字段
+                    info.b_num_interfaces = buffer[4];
+                    info.b_configuration_value = buffer[5];
+                    info.bm_attributes = buffer[7];
+                    info.b_max_power = buffer[8];
 
-                // 遍历描述符，查找当前接口的详细信息
-                while (p < buffer + len) {
-                    uint8_t desc_type = p[1];
-                    uint8_t desc_len = p[0];
+                    // 遍历描述符，查找当前接口的详细信息
+                    while (p < buffer + cfg_total_len) {
+                        uint8_t desc_type = p[1];
+                        uint8_t desc_len = p[0];
 
-                    if (desc_type == TUSB_DESC_INTERFACE) {
-                        uint8_t itf_num = p[2];
-                        uint8_t itf_prot = p[5];
-                        
-                        // 找到当前 HID 接口
-                        if (itf_prot == itf_protocol) {
-                            info.itf_num = itf_num;
-                            info.b_interface_class = p[4];
-                            info.b_interface_subclass = p[5];
+                        if (desc_type == TUSB_DESC_INTERFACE) {
+                            uint8_t itf_num = p[2];
+                            uint8_t itf_prot = p[5];
 
-                            // 跳过接口描述符，查找端点描述符
-                            p += desc_len;
-                            while (p < buffer + len) {
-                                if (p[1] == TUSB_DESC_ENDPOINT) {
-                                    const tusb_desc_endpoint_t* ep =
-                                        (const tusb_desc_endpoint_t*)p;
+                            // 找到当前 HID 接口
+                            if (itf_prot == itf_protocol) {
+                                info.itf_num = itf_num;
+                                info.b_interface_class = p[4];
+                                info.b_interface_subclass = p[5];
 
-                                    // 检查是否是中断端点（IN 方向）
-                                    if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
-                                        info.b_interval = ep->bInterval;
-                                        break;
+                                // 跳过接口描述符，查找端点描述符
+                                p += desc_len;
+                                while (p < buffer + cfg_total_len) {
+                                    if (p[1] == TUSB_DESC_ENDPOINT) {
+                                        const tusb_desc_endpoint_t* ep =
+                                            (const tusb_desc_endpoint_t*)p;
+
+                                        // 检查是否是中断端点（IN 方向）
+                                        if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
+                                            info.b_interval = ep->bInterval;
+                                            break;
+                                        }
                                     }
+                                    p += p[0];
                                 }
-                                p += p[0];
+                                break;
                             }
-                            break;
                         }
+                        p += desc_len;
                     }
-                    p += desc_len;
                 }
             }
 
