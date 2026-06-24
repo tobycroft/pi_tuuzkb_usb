@@ -10,7 +10,7 @@ namespace {
 
 constexpr std::uint8_t  kUartTXPin    = 0;
 constexpr std::uint8_t  kUartRXPin    = 1;
-constexpr std::uint32_t kUartBaudRate = 9600;
+constexpr std::uint32_t kUartBaudRate = 921600;
 
 bool g_initialized = false;
 
