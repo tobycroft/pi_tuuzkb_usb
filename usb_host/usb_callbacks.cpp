@@ -145,14 +145,20 @@ void poll_strings_task() {
                     uint8_t desc_type = p[1];
                     uint8_t desc_len = p[0];
                     if (desc_type == TUSB_DESC_INTERFACE) {
+                        // USB Interface Descriptor: p[2]=bInterfaceNumber, p[3]=bAlternateSetting,
+                        // p[4]=bNumEndpoints, p[5]=bInterfaceClass, p[6]=bInterfaceSubClass,
+                        // p[7]=bInterfaceProtocol, p[8]=iInterface
                         uint8_t itf_num = p[2];
-                        uint8_t itf_prot = p[5];
+                        uint8_t itf_class = p[5];
+                        uint8_t itf_subclass = p[6];
+                        uint8_t itf_prot = p[7];
                         if (itf_prot == itf_protocol) {
                             info.itf_num = itf_num;
-                            info.b_interface_class = p[4];
-                            info.b_interface_subclass = p[5];
+                            info.b_interface_class = itf_class;
+                            info.b_interface_subclass = itf_subclass;
                             p += desc_len;
                             while (p < buffer + cfg_total_len) {
+                                if (p[1] == TUSB_DESC_INTERFACE) break; // 进入下一个接口，停止
                                 if (p[1] == TUSB_DESC_ENDPOINT) {
                                     const tusb_desc_endpoint_t* ep = (const tusb_desc_endpoint_t*)p;
                                     if (ep->bmAttributes.xfer == TUSB_XFER_INTERRUPT) {
@@ -160,6 +166,7 @@ void poll_strings_task() {
                                         break;
                                     }
                                 }
+                                if (p[0] == 0) break; // 防止死循环
                                 p += p[0];
                             }
                             break;
