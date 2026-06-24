@@ -51,8 +51,8 @@ constexpr std::size_t kKeyboardFrameLen   = 7;   // 3+3+1
 //         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
 //         <itf_protocol><interval><instance><checksum> = 28 字节
 constexpr std::size_t kDeviceFrameLen     = 28;  // 3+24+1
-// 字符串帧: 57 AB 72 <dev_addr><mfg_len><mfg(16)><prod_len><prod(16)><serial_len><serial(16)><checksum> = 55 字节
-constexpr std::size_t kStringFrameLen     = 55;  // 3+51+1
+// 字符串帧: 57 AB 72 <dev_addr><mfg_len><mfg(64)><prod_len><prod(64)><serial_len><serial(64)><checksum> = 200 字节
+constexpr std::size_t kStringFrameLen     = 200; // 3+196+1
 
 // ===== 公共 API =====
 

@@ -457,47 +457,47 @@ void poll_strings_task() {
 
         if (dev_desc_result == XFER_RESULT_SUCCESS) {
             if (dev_desc.iManufacturer > 0) {
-                uint8_t str_buf[18];
+                uint8_t str_buf[66];
                 std::memset(str_buf, 0, sizeof(str_buf));
                 uint8_t str_result = tuh_descriptor_get_string_sync(
                     dev_addr, dev_desc.iManufacturer, (uint16_t)langid,
                     str_buf, (uint16_t)sizeof(str_buf));
                 if (str_result == XFER_RESULT_SUCCESS && str_buf[0] >= 3) {
                     uint16_t data_len = str_buf[0] - 2;
-                    if (data_len > 16) data_len = 16;
+                    if (data_len > 64) data_len = 64;
                     strings.manufacturer_len = data_len;
                     std::memcpy(strings.manufacturer, str_buf + 2, data_len);
-                    std::memset(strings.manufacturer + data_len, 0, 16 - data_len);
+                    std::memset(strings.manufacturer + data_len, 0, 64 - data_len);
                 }
             }
 
             if (dev_desc.iProduct > 0) {
-                uint8_t str_buf[18];
+                uint8_t str_buf[66];
                 std::memset(str_buf, 0, sizeof(str_buf));
                 uint8_t str_result = tuh_descriptor_get_string_sync(
                     dev_addr, dev_desc.iProduct, (uint16_t)langid,
                     str_buf, (uint16_t)sizeof(str_buf));
                 if (str_result == XFER_RESULT_SUCCESS && str_buf[0] >= 3) {
                     uint16_t data_len = str_buf[0] - 2;
-                    if (data_len > 16) data_len = 16;
+                    if (data_len > 64) data_len = 64;
                     strings.product_len = data_len;
                     std::memcpy(strings.product, str_buf + 2, data_len);
-                    std::memset(strings.product + data_len, 0, 16 - data_len);
+                    std::memset(strings.product + data_len, 0, 64 - data_len);
                 }
             }
 
             if (dev_desc.iSerialNumber > 0) {
-                uint8_t str_buf[18];
+                uint8_t str_buf[66];
                 std::memset(str_buf, 0, sizeof(str_buf));
                 uint8_t str_result = tuh_descriptor_get_string_sync(
                     dev_addr, dev_desc.iSerialNumber, (uint16_t)langid,
                     str_buf, (uint16_t)sizeof(str_buf));
                 if (str_result == XFER_RESULT_SUCCESS && str_buf[0] >= 3) {
                     uint16_t data_len = str_buf[0] - 2;
-                    if (data_len > 16) data_len = 16;
+                    if (data_len > 64) data_len = 64;
                     strings.serial_len = data_len;
                     std::memcpy(strings.serial, str_buf + 2, data_len);
-                    std::memset(strings.serial + data_len, 0, 16 - data_len);
+                    std::memset(strings.serial + data_len, 0, 64 - data_len);
                 }
             }
         }

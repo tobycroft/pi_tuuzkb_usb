@@ -176,10 +176,11 @@ struct device_info {
 
 // ---- 设备字符串描述符结构 ----
 // USB 字符串描述符（UTF-16LE 编码，枚举完成后单独获取）
+// 字符串数组大小为 64 字节，支持最多 32 个 UTF-16LE 字符
 struct device_strings {
-    uint8_t  manufacturer[16];  // 制造商字符串（UTF-16LE）
-    uint8_t  product[16];       // 产品名称字符串（UTF-16LE）
-    uint8_t  serial[16];        // 序列号字符串（UTF-16LE）
+    uint8_t  manufacturer[64];  // 制造商字符串（UTF-16LE）
+    uint8_t  product[64];       // 产品名称字符串（UTF-16LE）
+    uint8_t  serial[64];        // 序列号字符串（UTF-16LE）
     uint8_t  manufacturer_len;  // 实际制造商字符串长度
     uint8_t  product_len;       // 实际产品名称字符串长度
     uint8_t  serial_len;        // 实际序列号字符串长度

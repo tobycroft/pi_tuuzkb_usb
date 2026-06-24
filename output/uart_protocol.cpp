@@ -115,30 +115,30 @@ void uart_send_device_strings(uint8_t dev_addr, const usb_host::device_strings& 
     // 设备地址
     g_string_frame_buf[3] = dev_addr;
 
-    // 制造商字符串
+    // 制造商字符串（偏移 4，长度 1 + 64）
     g_string_frame_buf[4] = strings.manufacturer_len;
-    for (std::size_t i = 0; i < 16; i++) {
+    for (std::size_t i = 0; i < 64; i++) {
         g_string_frame_buf[5 + i] = (i < strings.manufacturer_len) ? strings.manufacturer[i] : 0x00;
     }
 
-    // 产品名称字符串
-    g_string_frame_buf[21] = strings.product_len;
-    for (std::size_t i = 0; i < 16; i++) {
-        g_string_frame_buf[22 + i] = (i < strings.product_len) ? strings.product[i] : 0x00;
+    // 产品名称字符串（偏移 69 = 4 + 1 + 64，长度 1 + 64）
+    g_string_frame_buf[69] = strings.product_len;
+    for (std::size_t i = 0; i < 64; i++) {
+        g_string_frame_buf[70 + i] = (i < strings.product_len) ? strings.product[i] : 0x00;
     }
 
-    // 序列号字符串
-    g_string_frame_buf[38] = strings.serial_len;
-    for (std::size_t i = 0; i < 16; i++) {
-        g_string_frame_buf[39 + i] = (i < strings.serial_len) ? strings.serial[i] : 0x00;
+    // 序列号字符串（偏移 134 = 69 + 1 + 64，长度 1 + 64）
+    g_string_frame_buf[134] = strings.serial_len;
+    for (std::size_t i = 0; i < 64; i++) {
+        g_string_frame_buf[135 + i] = (i < strings.serial_len) ? strings.serial[i] : 0x00;
     }
 
-    // XOR 校验（前 54 字节）
+    // XOR 校验（前 199 字节）
     std::uint8_t xor_sum = 0;
     for (std::size_t i = 0; i < kStringFrameLen - 1; i++) {
         xor_sum ^= g_string_frame_buf[i];
     }
-    g_string_frame_buf[54] = xor_sum;
+    g_string_frame_buf[199] = xor_sum;
 
     uart_write_blocking(uart0, g_string_frame_buf, kStringFrameLen);
 }
