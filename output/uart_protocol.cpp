@@ -41,15 +41,17 @@ void uart_protocol_init() {
 void uart_send_key_event(const usb_host::key_event& e) {
     if (!g_initialized) return;
 
+    g_frame_buf[0] = kFrameHdr1;
+    g_frame_buf[1] = kFrameHdr2;
+    g_frame_buf[2] = kFrameHdr3Kb;
     g_frame_buf[3] = e.usage_code;
     g_frame_buf[4] = e.pressed ? static_cast<std::uint8_t>(0x01) : static_cast<std::uint8_t>(0x00);
-    g_frame_buf[5] = e.modifiers;
 
     std::uint8_t xor_sum = 0;
     for (std::size_t i = 0; i < kKeyboardFrameLen - 1; i++) {
         xor_sum ^= g_frame_buf[i];
     }
-    g_frame_buf[6] = xor_sum;
+    g_frame_buf[5] = xor_sum;
 
     uart_write_blocking(uart0, g_frame_buf, kKeyboardFrameLen);
 }

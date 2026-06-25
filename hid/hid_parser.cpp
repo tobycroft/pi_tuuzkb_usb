@@ -141,4 +141,10 @@ namespace hid
         first_report_ = false;
     }
 
+    // 保存状态
+    std::memcpy(last_keys_, keys, 6);
+    last_modifiers_ = modifiers;
+    first_report_ = false;
+}
+
 } // namespace hid

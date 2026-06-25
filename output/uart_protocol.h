@@ -45,8 +45,8 @@ constexpr std::uint8_t kFrameHdr3Dev = 0x71;
 constexpr std::uint8_t kFrameHdr3Str = 0x72;
 
 // 帧长度常量
-// 键盘帧: 57 AB 77 <usage> <pressed> <modifiers> <checksum> = 7 字节
-constexpr std::size_t kKeyboardFrameLen   = 7;   // 3+3+1
+// 键盘帧: 57 AB 77 <usage> <pressed> <checksum> = 6 字节
+constexpr std::size_t kKeyboardFrameLen   = 6;   // 3+2+1
 // 设备帧: 57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
 //         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
 //         <itf_protocol><interval><instance><checksum> = 28 字节
@@ -62,7 +62,8 @@ constexpr std::size_t kStringFrameLen     = 200; // 3+196+1
 void uart_protocol_init();
 
 // 编码并发送一个 keyboard event 二进制帧
-// 帧内容：57 AB 77 <usage> <pressed> <modifiers> <XOR>
+// 帧内容：57 AB 77 <usage> <pressed> <XOR>
+// 仅发送普通按键事件，修饰键（usage 0xE0..0xE7）由调用方过滤，不进入此函数
 // 实现保证：
 //   - 原子调用：单次 uart_write_blocking 输出整个 frame，避免 printf 干扰
 //   - 不通过 printf 打印 key 信息
