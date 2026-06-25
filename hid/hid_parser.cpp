@@ -19,12 +19,30 @@ HidBootKeyboardParser::HidBootKeyboardParser()
     std::memset(last_keys_, 0, sizeof(last_keys_));
 }
 
+/**
+ * 重置解析器内部状态，等效于重新构造
+ *
+ * 适用场景：USB 设备断开后重新挂载、或总线复位时调用，
+ * 使解析器回到"尚未接收过任何报告"的初始状态，
+ * 避免残留的旧按键状态与新一轮报告比较而产生误报
+ */
 void HidBootKeyboardParser::reset() {
     std::memset(last_keys_, 0, sizeof(last_keys_));
     last_modifiers_ = 0;
     first_report_ = true;
 }
 
+/**
+ * 在 keycode 数组中线性查找指定键值
+ *
+ * 用于 parse() 中集合差运算：判断某个 Usage Code 是否存在于
+ * 当前报告或上一报告的 6 键数组中，从而区分 press / release
+ *
+ * @param key 待查找的 Usage Code
+ * @param arr keycode 数组指针（通常为 keys[] 或 last_keys_[]）
+ * @param n   数组长度（Boot Protocol 固定为 6）
+ * @return true 存在，false 不存在
+ */
 static bool keyInArray(uint8_t key, const uint8_t* arr, size_t n) {
     for (size_t i = 0; i < n; i++) {
         if (arr[i] == key) return true;
