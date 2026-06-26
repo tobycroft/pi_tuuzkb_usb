@@ -3,13 +3,19 @@
 
 // ===== UART 二进制协议输出层 =====
 //
-// Frame format:
-//   ┌─────────┬─────────┬───────┬──────┬──────────────┬──────────┐
-//   │  HEADER │  HEADER │ Index │ TYPE │    DATA      │ CHECKSUM │
-//   │  0x57   │  0xAB   │       │      │              │   SUM    │
-//   └─────────┴─────────┴───────┴──────┴──────────────┴──────────┘
+// Frame format (键盘帧，带 index):
+//   ┌─────────┬─────────┬──────┬──────────────┬───────┬──────────┐
+//   │  HEADER │  HEADER │ TYPE │    DATA      │ Index │ CHECKSUM │
+//   │  0x57   │  0xAB   │      │              │       │   SUM    │
+//   └─────────┴─────────┴──────┴──────────────┴───────┴──────────┘
 //
-// CHECKSUM = SUM of [0x57] + [0xAB] + [Index] + [TYPE] + [DATA0] + ... + [DATAN-1] (低8位)
+// Frame format (其他帧，不带 index):
+//   ┌─────────┬─────────┬──────┬──────────────┬──────────┐
+//   │  HEADER │  HEADER │ TYPE │    DATA      │ CHECKSUM │
+//   │  0x57   │  0xAB   │      │              │   SUM    │
+//   └─────────┴─────────┴──────┴──────────────┴──────────┘
+//
+// CHECKSUM = SUM of [0x57] + [0xAB] + [TYPE] + [DATA0] + ... + [DATAN-1] (+ [Index] if exists) (低8位)
 //
 // 设计原则：
 //   - USB HID 层只产生 key_event struct（不关心 UART 编码）
@@ -28,8 +34,6 @@
 namespace output {
 
 // ===== 帧常量 =====
-// 注: 使用 std::uint8_t / std::size_t 以严格符合 C++ <cstdint> 规范
-//     （消除 IDE "未定义标识符 uint8_t" 的静态分析告警）
 constexpr std::uint8_t kFrameHdr1 = 0x57;
 constexpr std::uint8_t kFrameHdr2 = 0xAB;
 
@@ -38,47 +42,37 @@ constexpr std::uint8_t kFrameTypeKb      = 0x77;
 constexpr std::uint8_t kFrameTypeDevice  = 0x71;
 constexpr std::uint8_t kFrameTypeString  = 0x72;
 
-// 键盘帧: 57 AB <index> 77 <usage> <pressed> <checksum> = 7 字节
-constexpr std::size_t kKeyboardFrameLen   = 7;   // 2+1+1+2+1
-// 设备帧: 57 AB <index> 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
+// 键盘帧: 57 AB 77 <usage> <pressed> <index> <checksum> = 7 字节
+constexpr std::size_t kKeyboardFrameLen   = 7;   // 2+1+2+1+1
+// 设备帧: 57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
 //         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
-//         <itf_protocol><interval><instance><checksum> = 29 字节
-constexpr std::size_t kDeviceFrameLen     = 29;  // 2+1+1+24+1
-// 字符串帧: 57 AB <index> 72 <dev_addr><mfg_len><mfg(64)><prod_len><prod(64)><serial_len><serial(64)><checksum> = 201 字节
-constexpr std::size_t kStringFrameLen     = 201; // 2+1+1+196+1
+//         <itf_protocol><interval><instance><checksum> = 28 字节
+constexpr std::size_t kDeviceFrameLen     = 28;  // 2+1+24+1
+// 字符串帧: 57 AB 72 <dev_addr><mfg_len><mfg(64)><prod_len><prod(64)><serial_len><serial(64)><checksum> = 200 字节
+constexpr std::size_t kStringFrameLen     = 200; // 2+1+196+1
 
 // ===== 公共 API =====
 
 // 初始化 UART0 协议层（需在发送任何帧之前调用一次）
-// - UART0: 9600/8N1, TX=GPIO0, RX=GPIO1
-// - FIFO enabled for stable output timing
 void uart_protocol_init();
 
 // 编码并发送一个 keyboard event 二进制帧
-// 帧内容：57 AB 77 <usage> <pressed> <XOR>
+// 帧内容：57 AB 77 <usage> <pressed> <index> <SUM>
 // 仅发送普通按键事件，修饰键（usage 0xE0..0xE7）由调用方过滤，不进入此函数
-// 实现保证：
-//   - 原子调用：单次 uart_write_blocking 输出整个 frame，避免 printf 干扰
-//   - 不通过 printf 打印 key 信息
 void uart_send_key_event(const usb_host::key_event& e);
 
 // 编码并发送一个设备事件二进制帧
-// 帧内容：57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
-//         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
-//         <itf_protocol><interval><instance><checksum>
-// 参数：info - 设备信息（包含完整描述符），mounted - true=设备插入，false=设备拔出
+// 帧内容：57 AB 71 <dev_addr><mounted><vid><pid>...<checksum>
 void uart_send_device_info(const usb_host::device_info& info, bool mounted);
 
 // 编码并发送一个字符串描述符帧
 // 帧内容：57 AB 72 <dev_addr><mfg_len><mfg(16)><prod_len><prod(16)><serial_len><serial(16)><checksum>
-// 参数：dev_addr - 设备地址，strings - 字符串描述符结构
 void uart_send_device_strings(uint8_t dev_addr, const usb_host::device_strings& strings);
 
-// 通用帧发送接口（供 hid_encoder 等模块使用）
-// 直接发送原始字节流到 UART0
+// 通用帧发送接口
 void uart_send_frame(const std::uint8_t* data, std::size_t len);
 
-// 是否已初始化（用于上层断言 / 调试检查）
+// 是否已初始化
 bool uart_protocol_is_initialized();
 
 } // namespace output
