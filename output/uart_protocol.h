@@ -1,23 +1,21 @@
 #ifndef OUTPUT_UART_PROTOCOL_H
 #define OUTPUT_UART_PROTOCOL_H
 
-// ===== UART 二进制协议输出层（CH9350L 风格） =====
+// ===== UART 二进制协议输出层 =====
 //
-// Frame format（LSB first，无流控）：
-//   ┌─────────┬─────────┬─────┬──────┬──────────────┬──────────┐
-//   │  HEADER │  HEADER │ LEN │ TYPE │    DATA      │ CHECKSUM │
-//   │  0x57   │  0xAB   │     │      │              │   XOR    │
-//   └─────────┴─────────┴─────┴──────┴──────────────┴──────────┘
+// Frame format:
+//   ┌─────────┬─────────┬───────┬──────┬──────────────┬──────────┐
+//   │  HEADER │  HEADER │ Index │ TYPE │    DATA      │ CHECKSUM │
+//   │  0x57   │  0xAB   │       │      │              │   SUM    │
+//   └─────────┴─────────┴───────┴──────┴──────────────┴──────────┘
 //
-// LEN = total frame length = 2 (header) + 1 (LEN) + 1 (TYPE) + N (DATA) + 1 (CHECKSUM)
-//
-// CHECKSUM = XOR of [0x57] ^ [0xAB] ^ [LEN] ^ [TYPE] ^ [DATA0] ^ ... ^ [DATAN-1]
+// CHECKSUM = SUM of [0x57] + [0xAB] + [Index] + [TYPE] + [DATA0] + ... + [DATAN-1] (低8位)
 //
 // 设计原则：
 //   - USB HID 层只产生 key_event struct（不关心 UART 编码）
 //   - 本模块负责 frame 编码 & 输出
 //   - 不使用 printf 输出 key 信息（仅调试信息可走 printf）
-//   - 输出到 UART0：TX=GPIO0, RX=GPIO1, 9600/8N1
+//   - 输出到 UART0：TX=GPIO0, RX=GPIO1, 921600/8N1
 
 #if __cplusplus < 201703L
 #error "uart_protocol requires C++17 or later"
@@ -35,24 +33,19 @@ namespace output {
 constexpr std::uint8_t kFrameHdr1 = 0x57;
 constexpr std::uint8_t kFrameHdr2 = 0xAB;
 
-// 键盘数据帧使用三字节头 57 AB 77（自定义协议，与 CH9350 区分）
-constexpr std::uint8_t kFrameHdr3Kb = 0x77;
+// 帧类型
+constexpr std::uint8_t kFrameTypeKb      = 0x77;
+constexpr std::uint8_t kFrameTypeDevice  = 0x71;
+constexpr std::uint8_t kFrameTypeString  = 0x72;
 
-// 设备事件帧使用三字节头 57 AB 71（自定义协议，设备枚举信息）
-constexpr std::uint8_t kFrameHdr3Dev = 0x71;
-
-// 字符串描述符帧使用三字节头 57 AB 72（USB 字符串描述符，枚举完成后获取）
-constexpr std::uint8_t kFrameHdr3Str = 0x72;
-
-// 帧长度常量
-// 键盘帧: 57 AB 77 <usage> <pressed> <checksum> = 6 字节
-constexpr std::size_t kKeyboardFrameLen   = 6;   // 3+2+1
-// 设备帧: 57 AB 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
+// 键盘帧: 57 AB <index> 77 <usage> <pressed> <checksum> = 7 字节
+constexpr std::size_t kKeyboardFrameLen   = 7;   // 2+1+1+2+1
+// 设备帧: 57 AB <index> 71 <dev_addr><mounted><vid><pid><bcd_usb><dev_class><dev_subclass><dev_protocol>
 //         <max_pkt0><bcd_dev><num_itf><cfg_val><attr><power><itf_num><itf_class><itf_subclass>
-//         <itf_protocol><interval><instance><checksum> = 28 字节
-constexpr std::size_t kDeviceFrameLen     = 28;  // 3+24+1
-// 字符串帧: 57 AB 72 <dev_addr><mfg_len><mfg(64)><prod_len><prod(64)><serial_len><serial(64)><checksum> = 200 字节
-constexpr std::size_t kStringFrameLen     = 200; // 3+196+1
+//         <itf_protocol><interval><instance><checksum> = 29 字节
+constexpr std::size_t kDeviceFrameLen     = 29;  // 2+1+1+24+1
+// 字符串帧: 57 AB <index> 72 <dev_addr><mfg_len><mfg(64)><prod_len><prod(64)><serial_len><serial(64)><checksum> = 201 字节
+constexpr std::size_t kStringFrameLen     = 201; // 2+1+1+196+1
 
 // ===== 公共 API =====
 
