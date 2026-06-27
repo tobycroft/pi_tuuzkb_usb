@@ -1,7 +1,7 @@
 // ===== 轻量级二进制编码器实现 =====
 // 将 HID 层产生的 key_event 编码为 8 字节 57AB 帧，并原子写入 UART0。
 //
-// 帧布局（与 output/uart_protocol.h 中定义的 keyboard event 帧完全一致）：
+// 帧布局（与 uart/uart_protocol.h 中定义的 keyboard event 帧完全一致）：
 //   byte0: 0x57
 //   byte1: 0xAB
 //   byte2: 0x08            (LEN = 总帧长度)

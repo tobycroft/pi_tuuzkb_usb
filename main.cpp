@@ -6,12 +6,11 @@
 //   ENABLE_DEBUG_TEXT=1:         同时在 UART0 输出文本日志（用于 bring-up 调试）
 //
 // 分层架构（严格遵守）：
-//   /usb_host   - TinyUSB host stack + HID 回调  → 仅产出 key_event struct
-//   /hid        - HID boot protocol parser        → 仅产出 key_event struct
-//   /output     - uart_protocol  (UART0 硬件初始化 + PING/PONG 轮询)
-//               - binary_encoder (轻量级 key_event → 57AB 帧编码器)
-//               - uart_logger    (文本日志，保留，默认关闭)
-//   main.cpp    - 组装层：初始化 + 回调路由 + 主循环
+//   /usb_host  - TinyUSB host stack + HID 回调  → 仅产出 key_event struct
+//   /hid       - HID boot protocol parser + HID encoder
+//   /uart      - UART0 硬件初始化 + 协议帧发送 + 日志
+//   /protocol  - 轻量级 key_event → 57AB 帧编码器
+//   main.cpp   - 组装层：初始化 + 回调路由 + 主循环
 
 // ENABLE_USB 默认值 = 1（HID host 已就绪；可由 CMake target_compile_definitions 覆盖）
 #ifndef ENABLE_USB
@@ -28,16 +27,16 @@
 #include "pico/time.h"
 
 #include "usb_host/usb_callbacks.h"
-#include "output/uart_protocol.h"
-#include "output/binary_encoder.h"
-#include "output/hid_encoder.h"
+#include "uart/uart_protocol.h"
+#include "protocol/binary_encoder.h"
+#include "hid/hid_encoder.h"
 #if ENABLE_USB
 #include "tusb.h"
 #include "hid/hid_parser.h"
 #endif
 
 #if ENABLE_DEBUG_TEXT
-#include "output/uart_logger.h"
+#include "uart/uart_logger.h"
 #include <cstdio>
 #endif
 

@@ -1,5 +1,5 @@
 #include "hid_encoder.h"
-#include "uart_protocol.h"
+#include "../uart/uart_protocol.h"
 #include <cstring>
 
 namespace output {

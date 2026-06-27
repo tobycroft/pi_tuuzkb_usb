@@ -3,7 +3,7 @@
 
 // ===== 轻量级二进制编码器 =====
 // 接收 HID 层产生的 key_event struct，将其编码为 57AB 风格的二进制帧，
-// 然后通过 UART0 发送。与 output/uart_protocol.h 中的 CH9350L 协议帧
+// 然后通过 UART0 发送。与 uart/uart_protocol.h 中的 CH9350L 协议帧
 // 保持一致，便于下游主控（PC / MCU）以同一套解析器消费。
 //
 // 57AB keyboard event 帧格式（总共 8 字节，固定长度）：
@@ -25,7 +25,7 @@
 //   * 轻量：encoder 只依赖 key_event struct，不直接操作 HID report
 //   * 可插拔：如果未来需要切换到 USB CDC / SPI 等输出，只需替换 encoder
 //
-// 与 output/uart_protocol.h 的关系：
+// 与 uart/uart_protocol.h 的关系：
 //   uart_protocol 负责 UART0 硬件初始化（9600/8N1，TX=GPIO0/RX=GPIO1）
 //   以及下行 PING/PONG 轮询；binary_encoder 仅负责上行 event 帧编码与发送。
 
@@ -36,7 +36,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "../usb_host/usb_callbacks.h"
-#include "uart_protocol.h"  // 使用 uart_protocol.h 中定义的 kFrameHdr1/kFrameHdr2
+#include "../uart/uart_protocol.h"  // 使用 uart_protocol.h 中定义的 kFrameHdr1/kFrameHdr2
 
 namespace output {
 

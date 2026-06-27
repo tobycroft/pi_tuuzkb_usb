@@ -53,10 +53,10 @@ add_executable(pi_tuuzkb_usb
     main.cpp
     usb_host/usb_callbacks.cpp
     hid/hid_parser.cpp
-    output/uart_protocol.cpp
-    output/uart_logger.cpp
-    output/binary_encoder.cpp
-    output/hid_encoder.cpp
+    hid/hid_encoder.cpp
+    uart/uart_protocol.cpp
+    uart/uart_logger.cpp
+    protocol/binary_encoder.cpp
 )
 
 # 将宏传递到所有编译单元
@@ -69,7 +69,8 @@ target_include_directories(pi_tuuzkb_usb PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/usb_host
     ${CMAKE_CURRENT_LIST_DIR}/hid
-    ${CMAKE_CURRENT_LIST_DIR}/output
+    ${CMAKE_CURRENT_LIST_DIR}/uart
+    ${CMAKE_CURRENT_LIST_DIR}/protocol
 )
 
 # ---- 基础链接库（始终需要）----
