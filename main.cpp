@@ -24,6 +24,7 @@
 #endif
 
 #include "pico/stdlib.h"
+#include "pico/bootrom.h"
 
 #include "usb_host/usb_callbacks.h"
 #include "output/uart_protocol.h"
@@ -45,6 +46,9 @@
 //   output::uart_protocol 负责 UART0 硬件初始化（9600/8N1）
 // —— 此处不调用任何 printf / 文本日志输出 key 信息
 // ============================================================================
+
+extern "C" bool get_bootsel_button(void);
+
 static void onKeyEvent(const usb_host::key_event& e) {
     output::uart_send_key_event(e);
 }
@@ -135,6 +139,13 @@ int main() {
     // ===== 4) 主循环 =====
     uint32_t last_tick_ms = to_ms_since_boot(get_absolute_time());
 
+    constexpr std::int64_t kBootBtnHoldUs = 2500000;
+    constexpr std::int64_t kBootBtnPollUs = 50000;
+
+    absolute_time_t btn_press_time{};
+    absolute_time_t last_bootsel_poll = get_absolute_time();
+    bool btn_was_pressed = false;
+
     while (true) {
 #if ENABLE_USB
         tuh_task();
@@ -142,6 +153,25 @@ int main() {
 #endif
 
         uint32_t now = to_ms_since_boot(get_absolute_time());
+
+        absolute_time_t now_abs = get_absolute_time();
+        if (absolute_time_diff_us(last_bootsel_poll, now_abs) >= kBootBtnPollUs) {
+            last_bootsel_poll = now_abs;
+
+            bool btn_pressed = !get_bootsel_button();
+
+            if (btn_pressed) {
+                if (!btn_was_pressed) {
+                    btn_press_time = now_abs;
+                    btn_was_pressed = true;
+                } else if (absolute_time_diff_us(btn_press_time, now_abs) >= kBootBtnHoldUs) {
+                    gpio_put(PICO_DEFAULT_LED_PIN, 0);
+                    reset_usb_boot(0, 0);
+                }
+            } else {
+                btn_was_pressed = false;
+            }
+        }
 
         // —— 心跳：每秒一次，仅调试模式输出文本（确认主循环未卡死）——
 #if ENABLE_DEBUG_TEXT
