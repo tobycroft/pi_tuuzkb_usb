@@ -25,6 +25,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/bootrom.h"
+#include "pico/time.h"
 
 #include "usb_host/usb_callbacks.h"
 #include "output/uart_protocol.h"
@@ -171,6 +172,19 @@ int main() {
             } else {
                 btn_was_pressed = false;
             }
+        }
+
+        // —— LED 指示 ——
+        // 未挂载键盘 → LED 常亮
+        // 已挂载键盘 → LED 灭，UART TX 时闪烁
+        constexpr std::int64_t kLedBlinkUs = 80000;
+        bool mounted = (usb_host::getMountedKeyboardCount() > 0);
+        bool uart_tx_active = absolute_time_diff_us(output::get_last_uart_tx_time(), now_abs) < kLedBlinkUs;
+
+        if (!mounted) {
+            gpio_put(PICO_DEFAULT_LED_PIN, 1);
+        } else {
+            gpio_put(PICO_DEFAULT_LED_PIN, uart_tx_active ? 1 : 0);
         }
 
         // —— 心跳：每秒一次，仅调试模式输出文本（确认主循环未卡死）——

@@ -14,6 +14,7 @@ constexpr std::uint32_t kUartBaudRate = 921600;
 
 bool g_initialized = false;
 std::uint8_t g_kb_pkt_index = 0;
+absolute_time_t g_last_uart_tx{};
 
 std::uint8_t g_frame_buf[kKeyboardFrameLen];
 std::uint8_t g_device_frame_buf[kDeviceFrameLen];
@@ -54,6 +55,7 @@ void uart_send_key_event(const usb_host::key_event& e) {
     }
     g_frame_buf[6] = sum;
 
+    g_last_uart_tx = get_absolute_time();
     uart_write_blocking(uart0, g_frame_buf, kKeyboardFrameLen);
 }
 
@@ -104,6 +106,7 @@ void uart_send_device_info(const usb_host::device_info& info, bool mounted) {
     }
     g_device_frame_buf[27] = sum;
 
+    g_last_uart_tx = get_absolute_time();
     uart_write_blocking(uart0, g_device_frame_buf, kDeviceFrameLen);
 }
 
@@ -143,16 +146,22 @@ void uart_send_device_strings(uint8_t dev_addr, const usb_host::device_strings& 
     }
     g_string_frame_buf[199] = sum;
 
+    g_last_uart_tx = get_absolute_time();
     uart_write_blocking(uart0, g_string_frame_buf, kStringFrameLen);
 }
 
 void uart_send_frame(const std::uint8_t* data, std::size_t len) {
     if (!g_initialized || data == nullptr || len == 0) return;
+    g_last_uart_tx = get_absolute_time();
     uart_write_blocking(uart0, data, len);
 }
 
 bool uart_protocol_is_initialized() {
     return g_initialized;
+}
+
+absolute_time_t get_last_uart_tx_time() {
+    return g_last_uart_tx;
 }
 
 } // namespace output

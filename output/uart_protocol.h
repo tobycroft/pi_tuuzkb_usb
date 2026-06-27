@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "../usb_host/usb_callbacks.h"
+#include "pico/time.h"
 
 namespace output {
 
@@ -74,6 +75,9 @@ void uart_send_frame(const std::uint8_t* data, std::size_t len);
 
 // 是否已初始化
 bool uart_protocol_is_initialized();
+
+// 获取最后一次 UART TX 的时间戳（用于 LED 闪烁指示）
+absolute_time_t get_last_uart_tx_time();
 
 } // namespace output
 
