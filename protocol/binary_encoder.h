@@ -26,7 +26,7 @@
 //   * 可插拔：如果未来需要切换到 USB CDC / SPI 等输出，只需替换 encoder
 //
 // 与 uart/uart_protocol.h 的关系：
-//   uart_protocol 负责 UART0 硬件初始化（9600/8N1，TX=GPIO0/RX=GPIO1）
+//   uart_protocol 负责 UART0 硬件初始化（921600/8N1，TX=GPIO0/RX=GPIO1）
 //   以及下行 PING/PONG 轮询；binary_encoder 仅负责上行 event 帧编码与发送。
 
 #if __cplusplus < 201703L

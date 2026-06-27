@@ -55,7 +55,6 @@ add_executable(pi_tuuzkb_usb
     hid/hid_parser.cpp
     hid/hid_encoder.cpp
     uart/uart_protocol.cpp
-    uart/uart_logger.cpp
     protocol/binary_encoder.cpp
 )
 

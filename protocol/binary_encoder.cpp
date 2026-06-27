@@ -16,8 +16,8 @@
 //   协议下游按精确字节解析，所以必须显式归一化为 0x00 / 0x01。
 //
 // 为什么使用 uart_write_blocking：
-//   对 UART0（9600 baud，TX FIFO 已开启）执行单次 8 字节写入：
-//     * 8 bytes @ 9600 baud (10 bit/byte) ≈ 8.3 ms
+//   对 UART0（921600 baud，TX FIFO 已开启）执行单次 8 字节写入：
+//     * 8 bytes @ 921600 baud (10 bit/byte) ≈ 86.8 µs
 //     * FIFO 缓冲足够，无需担心写失败
 //     * 单次调用保证原子性，不会被 stdio printf 或其他线程插入字节
 

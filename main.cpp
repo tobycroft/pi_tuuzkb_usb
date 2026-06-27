@@ -8,7 +8,7 @@
 // 分层架构（严格遵守）：
 //   /usb_host  - TinyUSB host stack + HID 回调  → 仅产出 key_event struct
 //   /hid       - HID boot protocol parser + HID encoder
-//   /uart      - UART0 硬件初始化 + 协议帧发送 + 日志
+//   /uart      - UART0 硬件初始化 + 协议帧发送
 //   /protocol  - 轻量级 key_event → 57AB 帧编码器
 //   main.cpp   - 组装层：初始化 + 回调路由 + 主循环
 
@@ -36,15 +36,13 @@
 #endif
 
 #if ENABLE_DEBUG_TEXT
-#include "uart/uart_logger.h"
 #include <cstdio>
 #endif
 
 // ============================================================================
 // key_event 路由：HID 层产生 key_event struct → 键盘帧编码器
 //   output::uart_send_key_event(e) 将其编码为 57AB77 帧并原子发送
-//   output::uart_protocol 负责 UART0 硬件初始化（9600/8N1）
-// —— 此处不调用任何 printf / 文本日志输出 key 信息
+//   output::uart_protocol 负责 UART0 硬件初始化（921600/8N1）
 // ============================================================================
 
 extern "C" bool get_bootsel_button(void);
@@ -81,18 +79,14 @@ int main() {
     gpio_put(PICO_DEFAULT_LED_PIN, 1);
 
 #if ENABLE_DEBUG_TEXT
-    // —— 调试模式：先初始化 stdio（默认 115200），再由 uart_protocol_init 覆盖为 9600 ——
-    // 注意：stdio_init_all() 会调用 uart_init(uart0, PICO_DEFAULT_UART_BAUD_RATE=115200)
-    //       必须在 uart_protocol_init() 之前调用，否则会被覆盖
+    // 调试模式：先初始化 stdio，再被 uart_protocol_init 覆盖为 921600
     stdio_init_all();
     sleep_ms(300);
 #endif
 
     // ===== 1) 初始化 UART0 二进制协议层（必须先于任何输出）=====
-    // - 9600 / 8N1
+    // - 921600 / 8N1
     // - TX = GPIO0, RX = GPIO1
-    // - 这是本项目唯一的"关键数据通道"
-    // - 注意：此调用会 uart_init(uart0, 9600)，覆盖 stdio_init_all 的 115200
     output::uart_protocol_init();
 
 #if ENABLE_DEBUG_TEXT
