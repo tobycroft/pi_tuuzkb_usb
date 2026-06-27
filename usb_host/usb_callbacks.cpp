@@ -386,11 +386,13 @@ void poll_strings_task() {
 size_t getMountedKeyboardCount() { return g_mounted; }
 
 void setKeyboardLed(uint8_t led_byte) {
+    static uint8_t s_led_byte = 0;
+    s_led_byte = led_byte;
     for (size_t i = 0; i < kMaxDevices; i++) {
         if (g_parsers[i].used) {
             uint8_t dev_addr = g_parsers[i].dev_addr;
             uint8_t instance = g_parsers[i].instance;
-            tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &led_byte, sizeof(led_byte));
+            tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &s_led_byte, sizeof(s_led_byte));
         }
     }
 }
