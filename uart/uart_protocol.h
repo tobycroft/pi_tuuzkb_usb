@@ -42,6 +42,7 @@ constexpr std::uint8_t kFrameHdr2 = 0xAB;
 constexpr std::uint8_t kFrameTypeKb      = 0x77;
 constexpr std::uint8_t kFrameTypeDevice  = 0x71;
 constexpr std::uint8_t kFrameTypeString  = 0x72;
+constexpr std::uint8_t kFrameTypeLed     = 0x73;
 
 // 键盘帧: 57 AB 77 <usage> <pressed> <index> <checksum> = 7 字节
 constexpr std::size_t kKeyboardFrameLen   = 7;   // 2+1+2+1+1
@@ -51,6 +52,8 @@ constexpr std::size_t kKeyboardFrameLen   = 7;   // 2+1+2+1+1
 constexpr std::size_t kDeviceFrameLen     = 28;  // 2+1+24+1
 // 字符串帧: 57 AB 72 <dev_addr><mfg_len><mfg(64)><prod_len><prod(64)><serial_len><serial(64)><checksum> = 200 字节
 constexpr std::size_t kStringFrameLen     = 200; // 2+1+196+1
+// LED帧: 57 AB 73 <led_byte> <checksum> = 5 字节
+constexpr std::size_t kLedFrameLen        = 5;   // 2+1+1+1
 
 // ===== 公共 API =====
 
@@ -78,6 +81,11 @@ bool uart_protocol_is_initialized();
 
 // 获取最后一次 UART TX 的时间戳（用于 LED 闪烁指示）
 absolute_time_t get_last_uart_tx_time();
+
+// 处理 UART RX 缓冲区中的字节，扫描并解析 0x73 LED 帧
+// 应在主循环中定期调用
+// 返回 true 表示解析到了有效的 LED 帧
+bool uart_rx_process();
 
 } // namespace output
 

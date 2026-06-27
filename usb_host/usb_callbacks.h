@@ -70,6 +70,10 @@ void poll_strings_task();
 // 获取当前挂载的键盘设备数量
 size_t getMountedKeyboardCount();
 
+// 设置所有已挂载键盘的 LED 状态（NUM_LOCK/CAPS_LOCK/SCROLL_LOCK）
+// led_byte: Bit0=NumLock, Bit1=CapsLock, Bit2=ScrollLock
+void setKeyboardLed(uint8_t led_byte);
+
 } // namespace usb_host
 
 #endif // USB_HOST_USB_CALLBACKS_H

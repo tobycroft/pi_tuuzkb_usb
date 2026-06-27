@@ -385,6 +385,16 @@ void poll_strings_task() {
 
 size_t getMountedKeyboardCount() { return g_mounted; }
 
+void setKeyboardLed(uint8_t led_byte) {
+    for (size_t i = 0; i < kMaxDevices; i++) {
+        if (g_parsers[i].used) {
+            uint8_t dev_addr = g_parsers[i].dev_addr;
+            uint8_t instance = g_parsers[i].instance;
+            tuh_hid_set_report(dev_addr, instance, 0, HID_REPORT_TYPE_OUTPUT, &led_byte, sizeof(led_byte));
+        }
+    }
+}
+
 } // namespace usb_host
 
 // TinyUSB C 回调接口
@@ -475,6 +485,7 @@ void registerMountCallback(MountCallback) {}
 void registerStringsCallback(StringsCallback) {}
 void poll_strings_task() {}
 size_t getMountedKeyboardCount() { return 0; }
+void setKeyboardLed(uint8_t) {}
 
 } // namespace usb_host
 

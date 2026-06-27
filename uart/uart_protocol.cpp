@@ -164,4 +164,71 @@ absolute_time_t get_last_uart_tx_time() {
     return g_last_uart_tx;
 }
 
+bool uart_rx_process() {
+    if (!g_initialized) return false;
+
+    enum class RxState {
+        WaitHdr1,
+        WaitHdr2,
+        WaitCmd,
+        WaitLedByte,
+        WaitChecksum
+    };
+
+    static RxState rx_state = RxState::WaitHdr1;
+    static std::uint8_t checksum_acc = 0;
+    static std::uint8_t led_byte = 0;
+
+    bool handled = false;
+
+    while (uart_is_readable(uart0)) {
+        std::uint8_t byte = uart_getc(uart0);
+
+        switch (rx_state) {
+            case RxState::WaitHdr1:
+                if (byte == kFrameHdr1) {
+                    checksum_acc = byte;
+                    rx_state = RxState::WaitHdr2;
+                }
+                break;
+
+            case RxState::WaitHdr2:
+                if (byte == kFrameHdr2) {
+                    checksum_acc += byte;
+                    rx_state = RxState::WaitCmd;
+                } else {
+                    rx_state = RxState::WaitHdr1;
+                }
+                break;
+
+            case RxState::WaitCmd:
+                if (byte == kFrameTypeLed) {
+                    checksum_acc += byte;
+                    rx_state = RxState::WaitLedByte;
+                } else {
+                    rx_state = RxState::WaitHdr1;
+                }
+                break;
+
+            case RxState::WaitLedByte:
+                led_byte = byte;
+                checksum_acc += byte;
+                rx_state = RxState::WaitChecksum;
+                break;
+
+            case RxState::WaitChecksum: {
+                std::uint8_t expected = static_cast<std::uint8_t>(checksum_acc & 0xFF);
+                rx_state = RxState::WaitHdr1;
+                if (byte == expected) {
+                    usb_host::setKeyboardLed(led_byte);
+                    handled = true;
+                }
+                break;
+            }
+        }
+    }
+
+    return handled;
+}
+
 } // namespace output

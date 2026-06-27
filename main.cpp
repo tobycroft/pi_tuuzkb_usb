@@ -146,6 +146,8 @@ int main() {
         usb_host::poll_strings_task();
 #endif
 
+        output::uart_rx_process();
+
         uint32_t now = to_ms_since_boot(get_absolute_time());
 
         absolute_time_t now_abs = get_absolute_time();
