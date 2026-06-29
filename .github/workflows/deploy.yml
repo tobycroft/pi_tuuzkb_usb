@@ -1,0 +1,23 @@
+name: Deploy to pi_tuuzkb_usbhost
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Deploy to pi_tuuzkb_usbhost
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.GH_PAT }}
+          external_repository: tobycroft/pi_tuuzkb_usbhost
+          publish_dir: ./
+          publish_branch: master
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
