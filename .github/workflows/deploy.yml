@@ -16,7 +16,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           deploy_key: ${{ secrets.GH_PAT }}
-          external_repository: tobycroft/pi_tuuzkb_usbhost
+          external_repository: TuuzNet/pi_tuuzkb_usbhost
           publish_dir: ./
           publish_branch: master
           user_name: 'github-actions[bot]'
