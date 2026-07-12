@@ -26,6 +26,12 @@ struct ParserSlot {
     uint8_t dev_addr;
     uint8_t instance;
     hid::HidBootKeyboardParser parser;
+
+    // NKRO 支持
+    bool has_nkro;
+    uint8_t nkro_report_id;
+    hid::HidNkroKeyboardParser nkro_parser;
+    bool use_nkro;
 };
 
 // 字符串获取状态机（异步回调链）
@@ -91,6 +97,9 @@ ParserSlot* findOrAllocSlot(uint8_t dev_addr, uint8_t instance, bool alloc) {
             g_parsers[i].dev_addr = dev_addr;
             g_parsers[i].instance = instance;
             g_parsers[i].parser.reset();
+            g_parsers[i].nkro_parser.reset();
+            g_parsers[i].has_nkro = false;
+            g_parsers[i].use_nkro = false;
             return &g_parsers[i];
         }
     }
@@ -108,6 +117,9 @@ void freeSlot(uint8_t dev_addr, uint8_t instance) {
             g_parsers[i].dev_addr = 0;
             g_parsers[i].instance = 0;
             g_parsers[i].parser.reset();
+            g_parsers[i].nkro_parser.reset();
+            g_parsers[i].has_nkro = false;
+            g_parsers[i].use_nkro = false;
             return;
         }
     }
@@ -404,15 +416,26 @@ extern "C" {
 
 // 设备挂载回调（TinyUSB 调用）
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const* desc_report, uint16_t desc_len) {
-    (void)desc_report;
-    (void)desc_len;
-
     const uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, instance); // TinyUSB API
 
     if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD || itf_protocol == HID_ITF_PROTOCOL_MOUSE) {
         if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
             auto* slot = usb_host::findOrAllocSlot(dev_addr, instance, true);
-            if (slot != nullptr) usb_host::g_mounted++;
+            if (slot != nullptr) {
+                usb_host::g_mounted++;
+
+                // 检测 NKRO 支持
+                hid::NkroReportInfo nkro_info = hid::detectNkroReport(desc_report, desc_len);
+                if (nkro_info.detected && nkro_info.report_id != 0) {
+                    slot->has_nkro = true;
+                    slot->nkro_report_id = nkro_info.report_id;
+                    slot->use_nkro = true;
+                    slot->nkro_parser.reset();
+                } else {
+                    slot->has_nkro = false;
+                    slot->use_nkro = false;
+                }
+            }
         }
 
         for (size_t i = 0; i < usb_host::kMaxDevices; i++) {
@@ -467,7 +490,15 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
     if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
         auto* slot = usb_host::findSlot(dev_addr, instance);
         if (slot != nullptr && usb_host::g_key_cb != nullptr) {
-            slot->parser.parse(report, static_cast<size_t>(len), usb_host::g_key_cb);
+            if (slot->use_nkro && len > 0 && report[0] == slot->nkro_report_id) {
+                // NKRO 报告：路由到 NKRO 解析器
+                // report[0] 是 Report ID，解析器从 report[1] 开始读取 modifiers + bitmap
+                slot->nkro_parser.parse(report, static_cast<size_t>(len), usb_host::g_key_cb, true);
+            } else if (!slot->use_nkro) {
+                // 无 NKRO 支持或 NKRO 未启用：使用 Boot Protocol 解析器
+                slot->parser.parse(report, static_cast<size_t>(len), usb_host::g_key_cb);
+            }
+            // NKRO 启用时，忽略非 NKRO 的 Report ID 报告（避免重复事件）
         }
     }
 
