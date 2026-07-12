@@ -56,6 +56,8 @@ add_executable(pi_tuuzkb_usb
     hid/hid_encoder.cpp
     uart/uart_protocol.cpp
     protocol/binary_encoder.cpp
+    drivers/dma_channel.cpp
+    drivers/uart_dma.cpp
 )
 
 # 将宏传递到所有编译单元
@@ -70,6 +72,7 @@ target_include_directories(pi_tuuzkb_usb PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/hid
     ${CMAKE_CURRENT_LIST_DIR}/uart
     ${CMAKE_CURRENT_LIST_DIR}/protocol
+    ${CMAKE_CURRENT_LIST_DIR}/drivers
 )
 
 # ---- 基础链接库（始终需要）----
@@ -82,6 +85,7 @@ target_link_libraries(pi_tuuzkb_usb
     hardware_uart
     hardware_gpio
     hardware_timer
+    hardware_dma
 )
 
 # ---- USB Host 相关链接库（仅 ENABLE_USB=1 时）----

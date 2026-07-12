@@ -93,7 +93,8 @@ void BinaryEncoder::encodeAndSend(const usb_host::key_event& e) {
     fillKeyboardFrame(frame_buf, e.usage_code, pressed_byte, e.modifiers);
 
     // 原子写入 UART0：一次调用 8 字节，保证帧完整性
-    uart_write_blocking(uart0, frame_buf, kFrameSize);
+    // 使用 uart_send_frame 以利用 DMA 加速（如果可用）
+    uart_send_frame(frame_buf, kFrameSize);
 }
 
 // ---- 便捷函数：等价于 BinaryEncoder{}.encodeAndSend(e) ----

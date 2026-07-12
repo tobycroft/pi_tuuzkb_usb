@@ -3,6 +3,7 @@
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
 #include "hardware/gpio.h"
+#include "../drivers/uart_dma.h"
 
 namespace output {
 
@@ -13,12 +14,23 @@ constexpr std::uint8_t  kUartRXPin    = 1;
 constexpr std::uint32_t kUartBaudRate = 921600;
 
 bool g_initialized = false;
+bool g_dma_enabled = false;
 std::uint8_t g_kb_pkt_index = 0;
 absolute_time_t g_last_uart_tx{};
+
+drivers::UartDmaTx g_uart_dma_tx;
 
 std::uint8_t g_frame_buf[kKeyboardFrameLen];
 std::uint8_t g_device_frame_buf[kDeviceFrameLen];
 std::uint8_t g_string_frame_buf[kStringFrameLen];
+
+inline void uart_tx_send(const std::uint8_t* data, std::size_t len) {
+    if (g_dma_enabled) {
+        g_uart_dma_tx.send_blocking(data, len);
+    } else {
+        uart_write_blocking(uart0, data, len);
+    }
+}
 
 } // namespace
 
@@ -32,6 +44,8 @@ void uart_protocol_init() {
 
     uart_set_format(uart0, 8, 1, UART_PARITY_NONE);
     uart_set_fifo_enabled(uart0, true);
+
+    g_dma_enabled = g_uart_dma_tx.init(uart0);
 
     g_frame_buf[0] = kFrameHdr1;
     g_frame_buf[1] = kFrameHdr2;
@@ -56,7 +70,7 @@ void uart_send_key_event(const usb_host::key_event& e) {
     g_frame_buf[6] = sum;
 
     g_last_uart_tx = get_absolute_time();
-    uart_write_blocking(uart0, g_frame_buf, kKeyboardFrameLen);
+    uart_tx_send(g_frame_buf, kKeyboardFrameLen);
 }
 
 void uart_send_device_info(const usb_host::device_info& info, bool mounted) {
@@ -107,7 +121,7 @@ void uart_send_device_info(const usb_host::device_info& info, bool mounted) {
     g_device_frame_buf[27] = sum;
 
     g_last_uart_tx = get_absolute_time();
-    uart_write_blocking(uart0, g_device_frame_buf, kDeviceFrameLen);
+    uart_tx_send(g_device_frame_buf, kDeviceFrameLen);
 }
 
 void uart_send_device_strings(uint8_t dev_addr, const usb_host::device_strings& strings) {
@@ -147,13 +161,13 @@ void uart_send_device_strings(uint8_t dev_addr, const usb_host::device_strings& 
     g_string_frame_buf[199] = sum;
 
     g_last_uart_tx = get_absolute_time();
-    uart_write_blocking(uart0, g_string_frame_buf, kStringFrameLen);
+    uart_tx_send(g_string_frame_buf, kStringFrameLen);
 }
 
 void uart_send_frame(const std::uint8_t* data, std::size_t len) {
     if (!g_initialized || data == nullptr || len == 0) return;
     g_last_uart_tx = get_absolute_time();
-    uart_write_blocking(uart0, data, len);
+    uart_tx_send(data, len);
 }
 
 bool uart_protocol_is_initialized() {
