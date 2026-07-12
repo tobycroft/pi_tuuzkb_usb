@@ -497,8 +497,18 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
             } else if (!slot->use_nkro) {
                 // 无 NKRO 支持或 NKRO 未启用：使用 Boot Protocol 解析器
                 slot->parser.parse(report, static_cast<size_t>(len), usb_host::g_key_cb);
+            } else {
+                // NKRO 启用但 Report ID 不匹配：回退到 Boot Protocol 解析
+                // 长时间待机后键盘可能发送 Boot Protocol 报告（无 NKRO Report ID），
+                // 若直接丢弃会导致按键事件丢失、LED 不亮
+                const uint8_t* boot_report = report;
+                size_t boot_len = len;
+                if (len > hid::kBootReportSize && report[0] != 0x00) {
+                    boot_report = report + 1;
+                    boot_len = len - 1;
+                }
+                slot->parser.parse(boot_report, boot_len, usb_host::g_key_cb);
             }
-            // NKRO 启用时，忽略非 NKRO 的 Report ID 报告（避免重复事件）
         }
     }
 
